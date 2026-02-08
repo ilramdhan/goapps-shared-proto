@@ -119,10 +119,14 @@ message LoginRequest {
     min_len: 1
     max_len: 100
   }];
-  // Optional TOTP code if 2FA is enabled.
-  optional string totp_code = 3 [(buf.validate.field).string = {
-    len: 6
-    pattern: "^[0-9]{6}$"
+  // TOTP code for 2FA login. Leave empty if 2FA is not enabled.
+  // Validation is skipped when empty; application layer handles the 2FA check.
+  string totp_code = 3 [(buf.validate.field) = {
+    ignore: IGNORE_IF_ZERO_VALUE
+    string: {
+      len: 6
+      pattern: "^[0-9]{6}$"
+    }
   }];
   // Device info for session tracking.
   string device_info = 4 [(buf.validate.field).string.max_len = 100];
