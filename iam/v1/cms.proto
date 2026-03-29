@@ -1,0 +1,759 @@
+syntax = "proto3";
+
+package iam.v1;
+
+// Note: go_package is managed by buf.gen.yaml managed mode
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "google/api/annotations.proto";
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+// CMSSectionType represents the type of a CMS landing page section.
+enum CMSSectionType {
+  // Default unspecified value.
+  CMS_SECTION_TYPE_UNSPECIFIED = 0;
+  // Hero banner section at the top of the landing page.
+  CMS_SECTION_TYPE_HERO = 1;
+  // Feature card section highlighting platform capabilities.
+  CMS_SECTION_TYPE_FEATURE = 2;
+  // FAQ accordion section with questions and answers.
+  CMS_SECTION_TYPE_FAQ = 3;
+  // Testimonial/quote section from users or stakeholders.
+  CMS_SECTION_TYPE_TESTIMONIAL = 4;
+  // Call-to-action section with button.
+  CMS_SECTION_TYPE_CTA = 5;
+  // Custom freeform section.
+  CMS_SECTION_TYPE_CUSTOM = 6;
+}
+
+// CMSSettingType represents the data type of a CMS setting value.
+enum CMSSettingType {
+  // Default unspecified value.
+  CMS_SETTING_TYPE_UNSPECIFIED = 0;
+  // Plain text value.
+  CMS_SETTING_TYPE_TEXT = 1;
+  // Rich text value (Markdown or HTML).
+  CMS_SETTING_TYPE_RICH_TEXT = 2;
+  // Image URL or path.
+  CMS_SETTING_TYPE_IMAGE = 3;
+  // URL value.
+  CMS_SETTING_TYPE_URL = 4;
+  // JSON structured value.
+  CMS_SETTING_TYPE_JSON = 5;
+}
+
+// =============================================================================
+// MESSAGES - CMS Page Entity
+// =============================================================================
+
+// CMSPage represents a full-page CMS content entity (e.g., Privacy Policy, Terms of Service).
+message CMSPage {
+  // Unique identifier (UUID).
+  string page_id = 1;
+  // URL slug (e.g., "privacy", "terms", "about"). Unique, immutable after creation.
+  string page_slug = 2;
+  // Page title.
+  string page_title = 3;
+  // Rich text content (Markdown or HTML).
+  string page_content = 4;
+  // SEO meta description.
+  string meta_description = 5;
+  // Whether the page is publicly visible.
+  bool is_published = 6;
+  // When the page was published (ISO 8601).
+  string published_at = 7;
+  // Display order.
+  int32 sort_order = 8;
+  // Audit information.
+  common.v1.AuditInfo audit = 16;
+}
+
+// =============================================================================
+// MESSAGES - CMS Section Entity
+// =============================================================================
+
+// CMSSection represents an individual section of the landing page
+// (e.g., hero banner, feature card, FAQ item).
+message CMSSection {
+  // Unique identifier (UUID).
+  string section_id = 1;
+  // Section type (HERO, FEATURE, FAQ, etc.).
+  CMSSectionType section_type = 2;
+  // Unique key (e.g., "landing_hero", "landing_feature_1"). Immutable after creation.
+  string section_key = 3;
+  // Section title.
+  string title = 4;
+  // Section subtitle or description.
+  string subtitle = 5;
+  // Rich text content body.
+  string content = 6;
+  // Lucide icon name (for feature cards, e.g., "Server", "Shield").
+  string icon_name = 7;
+  // Image URL (MinIO/S3 path).
+  string image_url = 8;
+  // CTA button text.
+  string button_text = 9;
+  // CTA button link.
+  string button_url = 10;
+  // Display order within its type.
+  int32 sort_order = 11;
+  // Whether the section is visible on the landing page.
+  bool is_published = 12;
+  // Flexible key-value pairs as JSON string.
+  string metadata = 13;
+  // Audit information.
+  common.v1.AuditInfo audit = 16;
+}
+
+// =============================================================================
+// MESSAGES - CMS Setting Entity
+// =============================================================================
+
+// CMSSetting represents a key-value site configuration
+// (e.g., site name, footer text, social links).
+message CMSSetting {
+  // Unique identifier (UUID).
+  string setting_id = 1;
+  // Unique key (e.g., "site_name", "footer_copyright"). Immutable.
+  string setting_key = 2;
+  // Setting value.
+  string setting_value = 3;
+  // Data type of the value.
+  CMSSettingType setting_type = 4;
+  // Group for admin UI organization (e.g., "general", "branding", "social").
+  string setting_group = 5;
+  // Description for admin UI tooltip.
+  string description = 6;
+  // Whether admins can modify this setting (some are system-locked).
+  bool is_editable = 7;
+  // Audit information.
+  common.v1.AuditInfo audit = 16;
+}
+
+// =============================================================================
+// MESSAGES - CMS Page: Create
+// =============================================================================
+
+// CreateCMSPageRequest is the request for creating a new CMS page.
+message CreateCMSPageRequest {
+  // URL slug (lowercase, alphanumeric with hyphens, 1-100 chars).
+  // Must start with a letter. Immutable after creation.
+  string page_slug = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+    pattern: "^[a-z][a-z0-9-]*$"
+  }];
+  // Page title (1-200 chars).
+  string page_title = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  // Rich text content (Markdown or HTML).
+  string page_content = 3;
+  // SEO meta description (max 500 chars).
+  string meta_description = 4 [(buf.validate.field).string.max_len = 500];
+  // Whether to publish immediately.
+  bool is_published = 5;
+  // Display order.
+  int32 sort_order = 6;
+}
+
+// CreateCMSPageResponse is the response for creating a CMS page.
+message CreateCMSPageResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Created CMS page data.
+  CMSPage data = 2;
+}
+
+// =============================================================================
+// MESSAGES - CMS Page: Get
+// =============================================================================
+
+// GetCMSPageRequest is the request for getting a CMS page by ID.
+message GetCMSPageRequest {
+  // CMS page ID (UUID format).
+  string page_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetCMSPageResponse is the response for getting a CMS page.
+message GetCMSPageResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // CMS page data.
+  CMSPage data = 2;
+}
+
+// GetCMSPageBySlugRequest is the request for getting a CMS page by its URL slug.
+// This is a public endpoint — no authentication required.
+message GetCMSPageBySlugRequest {
+  // URL slug (e.g., "privacy", "terms").
+  string slug = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+    pattern: "^[a-z][a-z0-9-]*$"
+  }];
+}
+
+// GetCMSPageBySlugResponse is the response for getting a CMS page by slug.
+message GetCMSPageBySlugResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // CMS page data.
+  CMSPage data = 2;
+}
+
+// =============================================================================
+// MESSAGES - CMS Page: Update
+// =============================================================================
+
+// UpdateCMSPageRequest is the request for updating a CMS page.
+// Note: page_slug is immutable and cannot be changed after creation.
+message UpdateCMSPageRequest {
+  // CMS page ID to update (UUID format).
+  string page_id = 1 [(buf.validate.field).string.uuid = true];
+  // New page title (optional, 1-200 chars if provided).
+  optional string page_title = 2 [(buf.validate.field).string = {max_len: 200}];
+  // New content (optional).
+  optional string page_content = 3;
+  // New meta description (optional, max 500 chars).
+  optional string meta_description = 4 [(buf.validate.field).string.max_len = 500];
+  // New published status (optional).
+  optional bool is_published = 5;
+  // New sort order (optional).
+  optional int32 sort_order = 6;
+}
+
+// UpdateCMSPageResponse is the response for updating a CMS page.
+message UpdateCMSPageResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated CMS page data.
+  CMSPage data = 2;
+}
+
+// =============================================================================
+// MESSAGES - CMS Page: Delete
+// =============================================================================
+
+// DeleteCMSPageRequest is the request for deleting (soft delete) a CMS page.
+message DeleteCMSPageRequest {
+  // CMS page ID to delete (UUID format).
+  string page_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteCMSPageResponse is the response for deleting a CMS page.
+message DeleteCMSPageResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+}
+
+// =============================================================================
+// MESSAGES - CMS Page: List
+// =============================================================================
+
+// ListCMSPagesRequest is the request for listing CMS pages with search and pagination.
+message ListCMSPagesRequest {
+  // Page number (1-indexed, min 1).
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  // Items per page (1-100).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Search query (searches in slug, title, content).
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  // Filter by published status: true = published only, false = draft only.
+  // If not set, returns all pages.
+  optional bool is_published = 4;
+  // Sort field: "slug", "title", "sort_order", "created_at" (default: "sort_order").
+  string sort_by = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "slug",
+      "title",
+      "sort_order",
+      "created_at"
+    ]
+  }];
+  // Sort order: "asc", "desc" (default: "asc").
+  string sort_order = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+// ListCMSPagesResponse is the response for listing CMS pages.
+message ListCMSPagesResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // List of CMS pages.
+  repeated CMSPage data = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// =============================================================================
+// MESSAGES - CMS Section: Create
+// =============================================================================
+
+// CreateCMSSectionRequest is the request for creating a new CMS section.
+message CreateCMSSectionRequest {
+  // Section type (required, cannot be UNSPECIFIED).
+  CMSSectionType section_type = 1 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  // Unique key (lowercase with underscores, 1-100 chars).
+  // Must start with a letter. Immutable after creation.
+  string section_key = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+    pattern: "^[a-z][a-z0-9_]*$"
+  }];
+  // Section title (1-200 chars).
+  string title = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  // Section subtitle (max 500 chars).
+  string subtitle = 4 [(buf.validate.field).string.max_len = 500];
+  // Rich text content body.
+  string content = 5;
+  // Lucide icon name (max 100 chars).
+  string icon_name = 6 [(buf.validate.field).string.max_len = 100];
+  // Image URL (max 500 chars).
+  string image_url = 7 [(buf.validate.field).string.max_len = 500];
+  // CTA button text (max 100 chars).
+  string button_text = 8 [(buf.validate.field).string.max_len = 100];
+  // CTA button link (max 500 chars).
+  string button_url = 9 [(buf.validate.field).string.max_len = 500];
+  // Display order within its type.
+  int32 sort_order = 10;
+  // Whether to publish immediately.
+  bool is_published = 11;
+  // Flexible metadata as JSON string.
+  string metadata = 12 [(buf.validate.field).string.max_len = 10000];
+}
+
+// CreateCMSSectionResponse is the response for creating a CMS section.
+message CreateCMSSectionResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Created CMS section data.
+  CMSSection data = 2;
+}
+
+// =============================================================================
+// MESSAGES - CMS Section: Get
+// =============================================================================
+
+// GetCMSSectionRequest is the request for getting a CMS section by ID.
+message GetCMSSectionRequest {
+  // CMS section ID (UUID format).
+  string section_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetCMSSectionResponse is the response for getting a CMS section.
+message GetCMSSectionResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // CMS section data.
+  CMSSection data = 2;
+}
+
+// =============================================================================
+// MESSAGES - CMS Section: Update
+// =============================================================================
+
+// UpdateCMSSectionRequest is the request for updating a CMS section.
+// Note: section_key is immutable and cannot be changed after creation.
+message UpdateCMSSectionRequest {
+  // CMS section ID to update (UUID format).
+  string section_id = 1 [(buf.validate.field).string.uuid = true];
+  // New section type (optional, cannot be UNSPECIFIED if provided).
+  optional CMSSectionType section_type = 2 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  // New title (optional, max 200 chars).
+  optional string title = 3 [(buf.validate.field).string = {max_len: 200}];
+  // New subtitle (optional, max 500 chars).
+  optional string subtitle = 4 [(buf.validate.field).string.max_len = 500];
+  // New content (optional).
+  optional string content = 5;
+  // New icon name (optional, max 100 chars).
+  optional string icon_name = 6 [(buf.validate.field).string.max_len = 100];
+  // New image URL (optional, max 500 chars).
+  optional string image_url = 7 [(buf.validate.field).string.max_len = 500];
+  // New button text (optional, max 100 chars).
+  optional string button_text = 8 [(buf.validate.field).string.max_len = 100];
+  // New button URL (optional, max 500 chars).
+  optional string button_url = 9 [(buf.validate.field).string.max_len = 500];
+  // New sort order (optional).
+  optional int32 sort_order = 10;
+  // New published status (optional).
+  optional bool is_published = 11;
+  // New metadata JSON (optional, max 10000 chars).
+  optional string metadata = 12 [(buf.validate.field).string.max_len = 10000];
+}
+
+// UpdateCMSSectionResponse is the response for updating a CMS section.
+message UpdateCMSSectionResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated CMS section data.
+  CMSSection data = 2;
+}
+
+// =============================================================================
+// MESSAGES - CMS Section: Delete
+// =============================================================================
+
+// DeleteCMSSectionRequest is the request for deleting (soft delete) a CMS section.
+message DeleteCMSSectionRequest {
+  // CMS section ID to delete (UUID format).
+  string section_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteCMSSectionResponse is the response for deleting a CMS section.
+message DeleteCMSSectionResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+}
+
+// =============================================================================
+// MESSAGES - CMS Section: List
+// =============================================================================
+
+// ListCMSSectionsRequest is the request for listing CMS sections with search,
+// filter, and pagination.
+message ListCMSSectionsRequest {
+  // Page number (1-indexed, min 1).
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  // Items per page (1-100).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Search query (searches in key, title, subtitle, content).
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  // Filter by section type.
+  // CMS_SECTION_TYPE_UNSPECIFIED (0) means "show all types" (no filter).
+  CMSSectionType section_type = 4;
+  // Filter by published status: true = published only, false = draft only.
+  // If not set, returns all sections.
+  optional bool is_published = 5;
+  // Sort field: "key", "title", "sort_order", "created_at" (default: "sort_order").
+  string sort_by = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "key",
+      "title",
+      "sort_order",
+      "created_at"
+    ]
+  }];
+  // Sort order: "asc", "desc" (default: "asc").
+  string sort_order = 7 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+// ListCMSSectionsResponse is the response for listing CMS sections.
+message ListCMSSectionsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // List of CMS sections.
+  repeated CMSSection data = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// =============================================================================
+// MESSAGES - CMS Section: Public Landing Content
+// =============================================================================
+
+// GetPublicLandingContentRequest is the request for fetching all published
+// landing page content in a single call. This is a public endpoint — no
+// authentication required.
+message GetPublicLandingContentRequest {}
+
+// GetPublicLandingContentResponse is the response containing all published
+// landing page sections and site settings.
+message GetPublicLandingContentResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // All published landing page sections, ordered by sort_order.
+  repeated CMSSection sections = 2;
+  // All site settings.
+  repeated CMSSetting settings = 3;
+}
+
+// =============================================================================
+// MESSAGES - CMS Setting: Get
+// =============================================================================
+
+// GetCMSSettingRequest is the request for getting a CMS setting by key.
+message GetCMSSettingRequest {
+  // Setting key (e.g., "site_name", "footer_copyright").
+  string setting_key = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+}
+
+// GetCMSSettingResponse is the response for getting a CMS setting.
+message GetCMSSettingResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // CMS setting data.
+  CMSSetting data = 2;
+}
+
+// =============================================================================
+// MESSAGES - CMS Setting: Update
+// =============================================================================
+
+// UpdateCMSSettingRequest is the request for updating a CMS setting value.
+message UpdateCMSSettingRequest {
+  // Setting key to update.
+  string setting_key = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // New value.
+  string setting_value = 2;
+}
+
+// UpdateCMSSettingResponse is the response for updating a CMS setting.
+message UpdateCMSSettingResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated CMS setting data.
+  CMSSetting data = 2;
+}
+
+// =============================================================================
+// MESSAGES - CMS Setting: List
+// =============================================================================
+
+// ListCMSSettingsRequest is the request for listing CMS settings.
+message ListCMSSettingsRequest {
+  // Filter by setting group (e.g., "branding", "landing").
+  // Empty string means "show all groups".
+  string setting_group = 1 [(buf.validate.field).string.max_len = 100];
+}
+
+// ListCMSSettingsResponse is the response for listing CMS settings.
+message ListCMSSettingsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // List of CMS settings.
+  repeated CMSSetting data = 2;
+}
+
+// =============================================================================
+// MESSAGES - CMS Setting: Bulk Update
+// =============================================================================
+
+// CMSSettingUpdate represents a single setting key-value pair for bulk update.
+message CMSSettingUpdate {
+  // Setting key.
+  string setting_key = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // New value.
+  string setting_value = 2;
+}
+
+// BulkUpdateCMSSettingsRequest is the request for updating multiple settings at once.
+message BulkUpdateCMSSettingsRequest {
+  // List of settings to update (at least 1).
+  repeated CMSSettingUpdate settings = 1 [(buf.validate.field).repeated.min_items = 1];
+}
+
+// BulkUpdateCMSSettingsResponse is the response for bulk updating settings.
+message BulkUpdateCMSSettingsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated settings.
+  repeated CMSSetting data = 2;
+}
+
+// =============================================================================
+// MESSAGES - CMS Image Upload
+// =============================================================================
+
+// UploadCMSImageRequest is the request for uploading an image to CMS storage (MinIO).
+message UploadCMSImageRequest {
+  // Target folder for organizing uploads (e.g., "sections", "pages").
+  string folder = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 50
+    pattern: "^[a-z][a-z0-9-]*$"
+  }];
+  // Raw file binary data (max 5MB).
+  bytes file_data = 2 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 5242880
+  }];
+  // Original file name.
+  string file_name = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 255
+  }];
+  // MIME content type (image/jpeg, image/png, image/webp, image/svg+xml).
+  string content_type = 4 [(buf.validate.field).string = {
+    in: [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/svg+xml"
+    ]
+  }];
+}
+
+// UploadCMSImageResponse is the response containing the uploaded image URL.
+message UploadCMSImageResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Public URL of the uploaded image.
+  string image_url = 2;
+}
+
+// =============================================================================
+// SERVICE DEFINITIONS
+// =============================================================================
+
+// CMSPageService manages full-page CMS content (Privacy Policy, Terms of Service, etc.).
+service CMSPageService {
+  // CreateCMSPage creates a new CMS page.
+  rpc CreateCMSPage(CreateCMSPageRequest) returns (CreateCMSPageResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/iam/cms/pages"
+      body: "*"
+    };
+  }
+
+  // GetCMSPage retrieves a CMS page by ID.
+  rpc GetCMSPage(GetCMSPageRequest) returns (GetCMSPageResponse) {
+    option (google.api.http) = {get: "/api/v1/iam/cms/pages/{page_id}"};
+  }
+
+  // GetCMSPageBySlug retrieves a CMS page by its URL slug.
+  // This is a public endpoint — no authentication required.
+  rpc GetCMSPageBySlug(GetCMSPageBySlugRequest) returns (GetCMSPageBySlugResponse) {
+    option (google.api.http) = {get: "/api/v1/iam/cms/pages/slug/{slug}"};
+  }
+
+  // UpdateCMSPage updates an existing CMS page.
+  // Note: page_slug is immutable and cannot be changed.
+  rpc UpdateCMSPage(UpdateCMSPageRequest) returns (UpdateCMSPageResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/iam/cms/pages/{page_id}"
+      body: "*"
+    };
+  }
+
+  // DeleteCMSPage soft deletes a CMS page.
+  rpc DeleteCMSPage(DeleteCMSPageRequest) returns (DeleteCMSPageResponse) {
+    option (google.api.http) = {delete: "/api/v1/iam/cms/pages/{page_id}"};
+  }
+
+  // ListCMSPages lists CMS pages with search, filter, and pagination.
+  rpc ListCMSPages(ListCMSPagesRequest) returns (ListCMSPagesResponse) {
+    option (google.api.http) = {get: "/api/v1/iam/cms/pages"};
+  }
+}
+
+// CMSSectionService manages landing page sections (hero, features, FAQ, etc.).
+service CMSSectionService {
+  // CreateCMSSection creates a new CMS section.
+  rpc CreateCMSSection(CreateCMSSectionRequest) returns (CreateCMSSectionResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/iam/cms/sections"
+      body: "*"
+    };
+  }
+
+  // GetCMSSection retrieves a CMS section by ID.
+  rpc GetCMSSection(GetCMSSectionRequest) returns (GetCMSSectionResponse) {
+    option (google.api.http) = {get: "/api/v1/iam/cms/sections/{section_id}"};
+  }
+
+  // UpdateCMSSection updates an existing CMS section.
+  // Note: section_key is immutable and cannot be changed.
+  rpc UpdateCMSSection(UpdateCMSSectionRequest) returns (UpdateCMSSectionResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/iam/cms/sections/{section_id}"
+      body: "*"
+    };
+  }
+
+  // DeleteCMSSection soft deletes a CMS section.
+  rpc DeleteCMSSection(DeleteCMSSectionRequest) returns (DeleteCMSSectionResponse) {
+    option (google.api.http) = {delete: "/api/v1/iam/cms/sections/{section_id}"};
+  }
+
+  // ListCMSSections lists CMS sections with search, filter, and pagination.
+  rpc ListCMSSections(ListCMSSectionsRequest) returns (ListCMSSectionsResponse) {
+    option (google.api.http) = {get: "/api/v1/iam/cms/sections"};
+  }
+
+  // GetPublicLandingContent fetches all published landing page content in one call.
+  // Returns all published sections + all site settings.
+  // This is a public endpoint — no authentication required.
+  rpc GetPublicLandingContent(GetPublicLandingContentRequest) returns (GetPublicLandingContentResponse) {
+    option (google.api.http) = {get: "/api/v1/public/landing"};
+  }
+
+  // UploadCMSImage uploads an image to MinIO storage for use in CMS sections.
+  // Returns the public URL of the uploaded image.
+  rpc UploadCMSImage(UploadCMSImageRequest) returns (UploadCMSImageResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/iam/cms/upload"
+      body: "*"
+    };
+  }
+}
+
+// CMSSettingService manages key-value site settings (site name, footer text, etc.).
+// Settings are pre-seeded and can only be read or updated — not created or deleted.
+service CMSSettingService {
+  // GetCMSSetting retrieves a CMS setting by key.
+  rpc GetCMSSetting(GetCMSSettingRequest) returns (GetCMSSettingResponse) {
+    option (google.api.http) = {get: "/api/v1/iam/cms/settings/{setting_key}"};
+  }
+
+  // UpdateCMSSetting updates a CMS setting value.
+  rpc UpdateCMSSetting(UpdateCMSSettingRequest) returns (UpdateCMSSettingResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/iam/cms/settings/{setting_key}"
+      body: "*"
+    };
+  }
+
+  // ListCMSSettings lists CMS settings, optionally filtered by group.
+  rpc ListCMSSettings(ListCMSSettingsRequest) returns (ListCMSSettingsResponse) {
+    option (google.api.http) = {get: "/api/v1/iam/cms/settings"};
+  }
+
+  // BulkUpdateCMSSettings updates multiple settings at once.
+  rpc BulkUpdateCMSSettings(BulkUpdateCMSSettingsRequest) returns (BulkUpdateCMSSettingsResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/iam/cms/settings"
+      body: "*"
+    };
+  }
+}
