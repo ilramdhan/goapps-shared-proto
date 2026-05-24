@@ -509,6 +509,34 @@ message GetCostResultResponse {
   CostResult result = 2;
 }
 
+// ListCostResultsRequest lists active (non-superseded) cost results across
+// products for a period + calc type, with optional product search + status.
+// All filters are optional: empty period means "latest available period".
+message ListCostResultsRequest {
+  // Pagination params.
+  common.v1.PaginationRequest pagination = 1;
+  // Period in YYYYMM (empty = latest period present in cst_product_cost).
+  string period = 2 [(buf.validate.field).string = {pattern: "^$|^[0-9]{6}$"}];
+  // Calculation type filter (UNSPECIFIED = no filter).
+  CalculationType calculation_type = 3;
+  // Product code/name search (case-insensitive, optional).
+  string search = 4 [(buf.validate.field).string.max_len = 100];
+  // Result status filter (UNSPECIFIED = active only, i.e. exclude SUPERSEDED).
+  CostResultStatus status = 5;
+}
+
+// ListCostResultsResponse returns a page of cost results across products.
+message ListCostResultsResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Page of cost result rows (resolved product code/name/uom; no UUIDs).
+  repeated CostResult items = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+  // The period actually used (resolved when request period was empty).
+  string resolved_period = 4;
+}
+
 // GetCostBreakdownRequest fetches the full drill-down for a cost.
 message GetCostBreakdownRequest {
   // Product sys id; must be > 0.
@@ -651,6 +679,11 @@ service CostCalcService {
   // Required permission: finance.cost.result.view.
   rpc GetCostResult(GetCostResultRequest) returns (GetCostResultResponse) {
     option (google.api.http) = {get: "/api/v1/finance/cost-results/{product_sys_id}/{period}/{calculation_type}"};
+  }
+  // ListCostResults lists active cost results across products for a period.
+  // Required permission: finance.cost.result.view.
+  rpc ListCostResults(ListCostResultsRequest) returns (ListCostResultsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-results"};
   }
   // GetCostBreakdown returns by-level + rm-details + formula-trace for a cost.
   // Required permission: finance.cost.result.view.
