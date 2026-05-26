@@ -1,0 +1,152 @@
+syntax = "proto3";
+
+package finance.v1;
+
+// Note: go_package is managed by buf.gen.yaml managed mode
+// option go_package = "github.com/mutugading/goapps-backend/gen/finance/v1;financev1";
+
+import "common/v1/common.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// =================== Enums ===================
+enum PeriodeGrain {
+  PERIODE_GRAIN_UNSPECIFIED = 0;
+  PERIODE_GRAIN_DAILY = 1;
+  PERIODE_GRAIN_MONTHLY = 2;
+  PERIODE_GRAIN_QUARTERLY = 3;
+  PERIODE_GRAIN_YEARLY = 4;
+}
+enum CompareMode {
+  COMPARE_MODE_UNSPECIFIED = 0;
+  COMPARE_MODE_NONE = 1;
+  COMPARE_MODE_MOM = 2;
+  COMPARE_MODE_QOQ = 3;
+  COMPARE_MODE_YOY = 4;
+  COMPARE_MODE_YTD = 5;
+  COMPARE_MODE_R12 = 6;
+}
+enum ChartType {
+  CHART_TYPE_UNSPECIFIED = 0;
+  CHART_TYPE_BAR = 1;
+  CHART_TYPE_HORIZONTAL_BAR = 2;
+  CHART_TYPE_STACKED_BAR = 3;
+  CHART_TYPE_LINE = 4;
+  CHART_TYPE_AREA = 5;
+  CHART_TYPE_WATERFALL = 6;
+  CHART_TYPE_DONUT = 7;
+  CHART_TYPE_KPI_CARD = 8;
+  CHART_TYPE_TREEMAP = 9;
+  CHART_TYPE_HEATMAP = 10;
+  CHART_TYPE_SCATTER = 11;
+  CHART_TYPE_MIXED = 12;
+  CHART_TYPE_DATA_TABLE = 13;
+}
+enum DataSourceType {
+  DATA_SOURCE_TYPE_UNSPECIFIED = 0;
+  DATA_SOURCE_TYPE_ORACLE = 1;
+  DATA_SOURCE_TYPE_LARAVEL = 2;
+  DATA_SOURCE_TYPE_EXCEL = 3;
+  DATA_SOURCE_TYPE_MANUAL = 4;
+  DATA_SOURCE_TYPE_API = 5;
+}
+
+// =================== Entity Messages ===================
+message DashboardGroup {
+  string group_id = 1;
+  string group_code = 2;
+  string group_name = 3;
+  string description = 4;
+  string icon = 5;
+  int32 display_order = 6;
+  bool is_active = 7;
+  common.v1.AuditInfo audit = 8;
+}
+
+message Dashboard {
+  string dashboard_id = 1;
+  string dashboard_code = 2;
+  string dashboard_title = 3;
+  string description = 4;
+  string filter_type = 5;
+  string filter_group_1 = 6;
+  PeriodeGrain periode_grain = 7;
+  string default_period = 8;
+  ChartType chart_type = 9;
+  google.protobuf.Struct chart_config = 10;
+  google.protobuf.Struct layout_config = 11;
+  repeated CompareMode compare_modes = 12;
+  google.protobuf.Struct kpi_config = 13;
+  bool drill_enabled = 14;
+  int32 max_drill_level = 15;
+  int32 cache_ttl_sec = 16;
+  int32 refresh_interval_sec = 17;
+  int32 display_order = 18;
+  string group_id = 19;
+  string group_name = 20;
+  string group_icon = 21;
+  bool is_active = 22;
+  repeated string allowed_role_codes = 23;
+  common.v1.AuditInfo audit = 24;
+}
+
+message DataSource {
+  string source_id = 1;
+  string source_code = 2;
+  string source_name = 3;
+  DataSourceType source_type = 4;
+  string description = 5;
+  bool is_active = 6;
+  common.v1.AuditInfo audit = 7;
+}
+
+message FactMetricDistinct {
+  repeated string types = 1;
+  repeated string group_1s = 2;
+  repeated string group_2s = 3;
+  repeated string group_3s = 4;
+  repeated string dimension_keys = 5;
+}
+
+message ChartDataResponse {
+  google.protobuf.Struct config = 1;
+  repeated Series series = 2;
+  repeated string categories = 3;
+  repeated KpiResult kpis = 4;
+  DrillContext drill_context = 5;
+  Meta meta = 6;
+}
+message Series {
+  string name = 1;
+  string lib_hint = 2;
+  repeated DataPoint points = 3;
+}
+message DataPoint {
+  string category = 1;
+  double value = 2;
+  string label = 3;
+  google.protobuf.Struct meta = 4;
+}
+message KpiResult {
+  string label = 1;
+  double value = 2;
+  string value_formatted = 3;
+  double compare_value = 4;
+  double delta_abs = 5;
+  double delta_pct = 6;
+  string compare_period_label = 7;
+  bool improving = 8;
+  repeated double sparkline = 9;
+}
+message DrillContext {
+  repeated string current_path = 1;
+  string next_field = 2;
+  repeated string next_values = 3;
+  bool can_drill = 4;
+}
+message Meta {
+  google.protobuf.Timestamp as_of = 1;
+  int32 row_count = 2;
+  bool cache_hit = 3;
+  string query_hash = 4;
+}
