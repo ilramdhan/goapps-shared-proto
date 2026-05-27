@@ -545,6 +545,119 @@ message TriggerJobResponse {
   BiJobLog data = 2;
 }
 
+// =================== Excel Upload ===================
+
+message UploadRowError {
+  int32 row = 1;
+  string column = 2;
+  string value = 3;
+  string issue = 4;
+  string expected = 5;
+}
+
+message BiUpload {
+  string upload_id = 1;
+  string target_type = 2; // FM_TYPE the file targets (e.g. MIS)
+  string file_name = 3;
+  int64 file_size = 4;
+  string status = 5; // PENDING|PREVIEW|COMMITTED|CANCELLED|FAILED
+  int32 total_rows = 6;
+  int32 valid_rows = 7;
+  int32 invalid_rows = 8;
+  int32 committed_rows = 9;
+  repeated UploadRowError errors = 10;
+  string uploaded_by = 11;
+  google.protobuf.Timestamp uploaded_at = 12;
+}
+
+message DownloadUploadTemplateRequest {
+  string target_type = 1 [(buf.validate.field).string.max_len = 40];
+}
+message DownloadUploadTemplateResponse {
+  common.v1.BaseResponse base = 1;
+  bytes file_content = 2;
+  string file_name = 3;
+}
+
+message ParseUploadRequest {
+  string target_type = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 40
+  }];
+  string file_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 255
+  }];
+  bytes file_content = 3 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 10485760
+  }];
+}
+message ParseUploadResponse {
+  common.v1.BaseResponse base = 1;
+  BiUpload data = 2; // preview header + per-row errors
+}
+
+message CommitUploadRequest {
+  string upload_id = 1 [(buf.validate.field).string.uuid = true];
+}
+message CommitUploadResponse {
+  common.v1.BaseResponse base = 1;
+  BiUpload data = 2;
+}
+
+message CancelUploadRequest {
+  string upload_id = 1 [(buf.validate.field).string.uuid = true];
+}
+message CancelUploadResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+message ListUploadsRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+}
+message ListUploadsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated BiUpload data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// =================== Config Audit ===================
+
+message BiAuditEntry {
+  int64 audit_id = 1;
+  string entity_type = 2; // dashboard|group
+  string entity_code = 3; // dashboard_code or group_code
+  string entity_title = 4;
+  string action = 5; // CREATE|UPDATE|DELETE
+  string changed_by = 6;
+  google.protobuf.Timestamp changed_at = 7;
+  string summary = 8;
+}
+message ListConfigAuditRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  string entity_type = 3 [(buf.validate.field).string = {
+    in: [
+      "",
+      "dashboard",
+      "group"
+    ]
+  }];
+}
+message ListConfigAuditResponse {
+  common.v1.BaseResponse base = 1;
+  repeated BiAuditEntry data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
 // =================== Services ===================
 
 // DashboardService manages BI dashboard definitions, groups, and per-dashboard role mappings.
@@ -619,6 +732,10 @@ service DashboardService {
   rpc DeleteDashboardGroup(DeleteDashboardGroupRequest) returns (DeleteDashboardGroupResponse) {
     option (google.api.http) = {delete: "/api/v1/finance/bi/groups/{group_id}"};
   }
+  // ListConfigAudit returns the dashboard/group configuration change history.
+  rpc ListConfigAudit(ListConfigAuditRequest) returns (ListConfigAuditResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/bi/audit"};
+  }
 }
 
 // ChartDataService serves shaped chart data for the viewer and admin preview.
@@ -664,5 +781,39 @@ service BiJobService {
       post: "/api/v1/finance/bi/jobs/{job_id}/trigger"
       body: "*"
     };
+  }
+}
+
+// BiUploadService handles Excel upload: template download, parse/preview into staging,
+// commit (UPSERT to fact_metric), cancel, and upload session history.
+service BiUploadService {
+  // DownloadUploadTemplate returns a blank .xlsx template matching the FACT_METRIC shape.
+  rpc DownloadUploadTemplate(DownloadUploadTemplateRequest) returns (DownloadUploadTemplateResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/bi/uploads/template"};
+  }
+  // ParseUpload parses an uploaded .xlsx, validates rows, writes to staging, returns a preview.
+  rpc ParseUpload(ParseUploadRequest) returns (ParseUploadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/bi/uploads/parse"
+      body: "*"
+    };
+  }
+  // CommitUpload UPSERTs the staged rows of a previewed session into fact_metric.
+  rpc CommitUpload(CommitUploadRequest) returns (CommitUploadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/bi/uploads/{upload_id}/commit"
+      body: "*"
+    };
+  }
+  // CancelUpload discards a previewed session without committing.
+  rpc CancelUpload(CancelUploadRequest) returns (CancelUploadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/bi/uploads/{upload_id}/cancel"
+      body: "*"
+    };
+  }
+  // ListUploads returns paginated upload session history.
+  rpc ListUploads(ListUploadsRequest) returns (ListUploadsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/bi/uploads"};
   }
 }
