@@ -1,0 +1,986 @@
+syntax = "proto3";
+
+package finance.v1;
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "finance/v1/uom.proto";
+import "google/api/annotations.proto";
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+// RMGroupFlag identifies which aggregated stage rate feeds a cost purpose
+// (valuation / marketing / simulation), or whether the group uses its
+// configured init override value. Mirrors the `cst_rm_group_head.flag_*`
+// domain constraint.
+enum RMGroupFlag {
+  // Default zero value. Rejected on create/update requests via not_in: [0].
+  RM_GROUP_FLAG_UNSPECIFIED = 0;
+  // Use the init_val_* override on the head; skips cascade.
+  RM_GROUP_FLAG_INIT = 1;
+  // Use the CONS stage rate.
+  RM_GROUP_FLAG_CONS = 2;
+  // Use the STORES stage rate.
+  RM_GROUP_FLAG_STORES = 3;
+  // Use the DEPT stage rate.
+  RM_GROUP_FLAG_DEPT = 4;
+  // Use the first PO stage rate.
+  RM_GROUP_FLAG_PO_1 = 5;
+  // Use the second PO stage rate.
+  RM_GROUP_FLAG_PO_2 = 6;
+  // Use the third PO stage rate.
+  RM_GROUP_FLAG_PO_3 = 7;
+}
+
+// RMValuationFlag selects which computed rate becomes `cost_val` in the
+// RM Cost row. UNSPECIFIED behaves as AUTO (CL → SL → FL fallback, where
+// FL incorporates the per-detail valuation_default_value).
+enum RMValuationFlag {
+  // Default zero value. Treated as AUTO (CL→SL→FL fallback).
+  RM_VALUATION_FLAG_UNSPECIFIED = 0;
+  // Use Consumption Rate (CR) — group-total cons_val / cons_qty.
+  RM_VALUATION_FLAG_CR = 1;
+  // Use Stock Rate (SR) — group-total stock_val / stock_qty.
+  RM_VALUATION_FLAG_SR = 2;
+  // Use PO Rate (PR) — group-total po_val / po_qty.
+  RM_VALUATION_FLAG_PR = 3;
+  // Use Consumption Landed Cost (CL) — group-total CL aggregate.
+  RM_VALUATION_FLAG_CL = 4;
+  // Use Stock Landed Cost (SL) — group-total SL aggregate.
+  RM_VALUATION_FLAG_SL = 5;
+  // Use Fix Landed Cost (FL) — MAX of per-detail FL.
+  RM_VALUATION_FLAG_FL = 6;
+}
+
+// RMMarketingFlag selects which computed marketing projection becomes
+// `cost_mark`. UNSPECIFIED behaves as AUTO (SP → PP → FP fallback).
+enum RMMarketingFlag {
+  // Default zero value. Treated as AUTO (SP→PP→FP fallback).
+  RM_MARKETING_FLAG_UNSPECIFIED = 0;
+  // Projection Stock Landed Cost.
+  RM_MARKETING_FLAG_SP = 1;
+  // Projection PO Landed Cost.
+  RM_MARKETING_FLAG_PP = 2;
+  // Projection Fix Value Landed Cost.
+  RM_MARKETING_FLAG_FP = 3;
+}
+
+// RemoveItemsMode controls how RemoveItems disposes of detail rows.
+enum RemoveItemsMode {
+  // Default zero value. Rejected via not_in: [0].
+  REMOVE_ITEMS_MODE_UNSPECIFIED = 0;
+  // Mark the details inactive but keep the rows for audit history.
+  REMOVE_ITEMS_MODE_DEACTIVATE = 1;
+  // Soft-delete the details (sets deleted_at/deleted_by).
+  REMOVE_ITEMS_MODE_SOFT_DELETE = 2;
+}
+
+// RMGroupingScope filters the grouping monitor view by whether each
+// (item_code, grade_code) pair is currently assigned to an active RM group.
+// Status is evaluated cross-period — group membership is master data and
+// does not depend on the period the item appeared in the sync feed.
+enum RMGroupingScope {
+  // Default zero value. Treated as UNGROUPED.
+  RM_GROUPING_SCOPE_UNSPECIFIED = 0;
+  // Items not assigned to any active group (deleted/inactive details count
+  // as ungrouped — operator must reassign to surface the item again).
+  RM_GROUPING_SCOPE_UNGROUPED = 1;
+  // Items with at least one active, non-deleted detail row in any group.
+  RM_GROUPING_SCOPE_GROUPED = 2;
+}
+
+// =============================================================================
+// MESSAGES - Entity
+// =============================================================================
+
+// RMGroupHead is the aggregate root representing an RM group's cost configuration.
+message RMGroupHead {
+  // Group head UUID.
+  string group_head_id = 1;
+  // Unique group code (uppercase; allows spaces + hyphens; 1-30 chars).
+  string group_code = 2;
+  // Display name.
+  string group_name = 3;
+  // Optional description.
+  string description = 4;
+  // Optional colourant tag.
+  string colourant = 5;
+  // Optional CI name tag.
+  string ci_name = 6;
+  // Cost percentage multiplier (raw, UI formats for display).
+  double cost_percentage = 7;
+  // Per-kg overhead added to landed cost.
+  double cost_per_kg = 8;
+  // Stage flag used for valuation cost.
+  RMGroupFlag flag_valuation = 9;
+  // Stage flag used for marketing cost.
+  RMGroupFlag flag_marketing = 10;
+  // Stage flag used for simulation cost.
+  RMGroupFlag flag_simulation = 11;
+  // Init-value override for valuation (set when flag_valuation = INIT).
+  optional double init_val_valuation = 12;
+  // Init-value override for marketing (set when flag_marketing = INIT).
+  optional double init_val_marketing = 13;
+  // Init-value override for simulation (set when flag_simulation = INIT).
+  optional double init_val_simulation = 14;
+  // Whether the group is active.
+  bool is_active = 15;
+  // Audit metadata.
+  common.v1.AuditInfo audit = 16;
+  // V2: Marketing freight rate (added to base rate before duty/anti).
+  optional double marketing_freight_rate = 17;
+  // V2: Marketing anti-dumping percentage (whole percent, e.g. 5 = 5%).
+  optional double marketing_anti_dumping_pct = 18;
+  // V2: Marketing default value (drives FP projection when set).
+  optional double marketing_default_value = 19;
+  // V2: Valuation flag (CR/SR/PR/CL/SL/FL) — replaces flag_valuation semantics
+  // for the new engine. When UNSPECIFIED uses AUTO fallback CL→SL→FL.
+  RMValuationFlag valuation_flag = 20;
+  // V2: Marketing flag (SP/PP/FP) — replaces flag_marketing semantics.
+  // When UNSPECIFIED uses AUTO fallback SP→PP→FP.
+  RMMarketingFlag marketing_flag = 21;
+}
+
+// RMGroupDetail is one item's membership in an RM group.
+message RMGroupDetail {
+  // Detail UUID.
+  string group_detail_id = 1;
+  // Owning group head UUID.
+  string group_head_id = 2;
+  // Item code.
+  string item_code = 3;
+  // Item name (snapshot).
+  string item_name = 4;
+  // Item type code.
+  string item_type_code = 5;
+  // Grade code.
+  string grade_code = 6;
+  // Item grade.
+  string item_grade = 7;
+  // UOM code.
+  string uom_code = 8;
+  // Per-item marketing percentage (nil when unset).
+  optional double market_percentage = 9;
+  // Per-item marketing value in rupiah (nil when unset).
+  optional double market_value_rp = 10;
+  // Display order within the group.
+  int32 sort_order = 11;
+  // Contributes to rate aggregation when true.
+  bool is_active = 12;
+  // Placeholder row (excluded from aggregation regardless of is_active).
+  bool is_dummy = 13;
+  // V2: Valuation freight rate (per detail; feeds CL/SL/FL formulas).
+  optional double valuation_freight_rate = 14;
+  // V2: Valuation anti-dumping percentage (decimal, e.g. 0.10 = 10%).
+  optional double valuation_anti_dumping_pct = 15;
+  // Audit metadata.
+  common.v1.AuditInfo audit = 16;
+  // V2: Valuation duty percentage (decimal).
+  optional double valuation_duty_pct = 17;
+  // V2: Valuation transport rate (per detail).
+  optional double valuation_transport_rate = 18;
+  // V2: Valuation default value (per detail; drives FL).
+  optional double valuation_default_value = 19;
+}
+
+// RMGroupHeadWithDetails bundles a head and its details for the Get response.
+message RMGroupHeadWithDetails {
+  // Head data.
+  RMGroupHead head = 1;
+  // Details owned by the head.
+  repeated RMGroupDetail details = 2;
+}
+
+// UngroupedItem represents one (item_code, grade_code) pair viewed through the
+// grouping monitor. Used by both UNGROUPED and GROUPED scopes — the group_*
+// fields are populated only when the item is assigned to an active group.
+//
+// Per-period qty/rate snapshot fields were removed (reserved 1, 8-25) because
+// the monitor view is cross-period and those numbers are no longer relevant
+// to the grouped/ungrouped status.
+message UngroupedItem {
+  reserved 1;
+  reserved "period";
+  reserved 8 to 25;
+  reserved "cons_val", "stores_val", "cons_qty", "cons_rate", "stores_qty", "stores_rate", "dept_qty", "dept_val", "dept_rate", "last_po_qty1", "last_po_val1", "last_po_rate1", "last_po_qty2", "last_po_val2", "last_po_rate2", "last_po_qty3", "last_po_val3", "last_po_rate3";
+
+  // Item code.
+  string item_code = 2;
+  // Item name (latest known from sync feed).
+  string item_name = 3;
+  // Item type code (latest known from sync feed).
+  string item_type_code = 4;
+  // Grade code.
+  string grade_code = 5;
+  // Item grade (grade_name from the sync feed).
+  string item_grade = 6;
+  // UOM code (latest known from sync feed).
+  string uom_code = 7;
+
+  // Owning group head UUID. Empty when scope = UNGROUPED.
+  string group_head_id = 26;
+  // Owning group code (uppercase). Empty when scope = UNGROUPED.
+  string group_code = 27;
+  // Owning group name. Empty when scope = UNGROUPED.
+  string group_name = 28;
+  // Sort order within the group. Zero when scope = UNGROUPED.
+  int32 sort_order = 29;
+  // ISO-8601 timestamp the item was first added to the group (created_at on
+  // the active detail row). Empty when scope = UNGROUPED.
+  string assigned_at = 30;
+}
+
+// SkippedItem captures items rejected by AddItems because they already belong
+// to another active group.
+message SkippedItem {
+  // Item code that was skipped.
+  string item_code = 1;
+  // Owning group head UUID.
+  string owning_group_head_id = 2;
+  // Owning detail UUID.
+  string owning_group_detail_id = 3;
+  // Owning group code (for UI display).
+  string owning_group_code = 4;
+}
+
+// =============================================================================
+// MESSAGES - Create
+// =============================================================================
+
+// Create a new RM group head.
+message CreateRMGroupRequest {
+  // Group code (uppercase; spaces + hyphens allowed; 1-30 chars).
+  string group_code = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 30
+    pattern: "^[A-Z0-9][A-Z0-9 \\-]{0,29}$"
+  }];
+  // Display name (1-200 chars).
+  string group_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  // Optional description (max 1000 chars).
+  string description = 3 [(buf.validate.field).string.max_len = 1000];
+  // Optional colourant tag.
+  string colourant = 4 [(buf.validate.field).string.max_len = 100];
+  // Optional CI name tag.
+  string ci_name = 5 [(buf.validate.field).string.max_len = 100];
+  // Cost percentage multiplier (>= 0). Aliased as Marketing Duty %.
+  double cost_percentage = 6 [(buf.validate.field).double.gte = 0];
+  // Per-kg overhead (>= 0). Aliased as Marketing Transport Rate.
+  double cost_per_kg = 7 [(buf.validate.field).double.gte = 0];
+  // V2: Marketing freight rate.
+  optional double marketing_freight_rate = 8 [(buf.validate.field).double.gte = 0];
+  // V2: Marketing anti-dumping percentage (whole percent).
+  optional double marketing_anti_dumping_pct = 9 [(buf.validate.field).double.gte = 0];
+  // V2: Marketing default value.
+  optional double marketing_default_value = 10 [(buf.validate.field).double.gte = 0];
+  // V2: Valuation flag.
+  RMValuationFlag valuation_flag = 11;
+  // V2: Marketing flag.
+  RMMarketingFlag marketing_flag = 12;
+}
+
+// Create response.
+message CreateRMGroupResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Created head.
+  RMGroupHead data = 2;
+}
+
+// =============================================================================
+// MESSAGES - Get
+// =============================================================================
+
+// Get an RM group head + its details.
+message GetRMGroupRequest {
+  // Head UUID.
+  string group_head_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// Get response.
+message GetRMGroupResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Head + details.
+  RMGroupHeadWithDetails data = 2;
+}
+
+// =============================================================================
+// MESSAGES - Update
+// =============================================================================
+
+// Partial update of an RM group head. Absent fields leave state unchanged.
+// Clear_* booleans explicitly set nullable fields to NULL.
+message UpdateRMGroupRequest {
+  // Head UUID to update.
+  string group_head_id = 1 [(buf.validate.field).string.uuid = true];
+  // New display name.
+  optional string group_name = 2 [(buf.validate.field).string = {max_len: 200}];
+  // New description.
+  optional string description = 3 [(buf.validate.field).string.max_len = 1000];
+  // New colourant tag.
+  optional string colourant = 4 [(buf.validate.field).string.max_len = 100];
+  // New CI name tag.
+  optional string ci_name = 5 [(buf.validate.field).string.max_len = 100];
+  // New cost percentage (>= 0).
+  optional double cost_percentage = 6 [(buf.validate.field).double.gte = 0];
+  // New per-kg overhead (>= 0).
+  optional double cost_per_kg = 7 [(buf.validate.field).double.gte = 0];
+  // New valuation flag.
+  optional RMGroupFlag flag_valuation = 8 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  // New marketing flag.
+  optional RMGroupFlag flag_marketing = 9 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  // New simulation flag.
+  optional RMGroupFlag flag_simulation = 10 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  // New init-val override for valuation (>= 0).
+  optional double init_val_valuation = 11 [(buf.validate.field).double.gte = 0];
+  // New init-val override for marketing (>= 0).
+  optional double init_val_marketing = 12 [(buf.validate.field).double.gte = 0];
+  // New init-val override for simulation (>= 0).
+  optional double init_val_simulation = 13 [(buf.validate.field).double.gte = 0];
+  // New active status.
+  optional bool is_active = 14;
+  // When true, force init_val_valuation to NULL (overrides init_val_valuation field).
+  bool clear_init_val_valuation = 15;
+  // When true, force init_val_marketing to NULL.
+  bool clear_init_val_marketing = 16;
+  // When true, force init_val_simulation to NULL.
+  bool clear_init_val_simulation = 17;
+  // V2: Marketing freight rate.
+  optional double marketing_freight_rate = 18 [(buf.validate.field).double.gte = 0];
+  // V2: Marketing anti-dumping % (whole percent).
+  optional double marketing_anti_dumping_pct = 19 [(buf.validate.field).double.gte = 0];
+  // V2: Marketing default value.
+  optional double marketing_default_value = 20 [(buf.validate.field).double.gte = 0];
+  // V2: Valuation flag.
+  optional RMValuationFlag valuation_flag = 21;
+  // V2: Marketing flag.
+  optional RMMarketingFlag marketing_flag = 22;
+  // V2 clear flags for nullable marketing fields.
+  bool clear_marketing_freight_rate = 23;
+  bool clear_marketing_anti_dumping_pct = 24;
+  bool clear_marketing_default_value = 25;
+}
+
+// Update response.
+message UpdateRMGroupResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Updated head.
+  RMGroupHead data = 2;
+}
+
+// =============================================================================
+// MESSAGES - Delete
+// =============================================================================
+
+// Soft-delete an RM group head and cascade to its details.
+message DeleteRMGroupRequest {
+  // Head UUID.
+  string group_head_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// Delete response.
+message DeleteRMGroupResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+}
+
+// =============================================================================
+// MESSAGES - List
+// =============================================================================
+
+// List RM group heads with search + filter + pagination.
+message ListRMGroupsRequest {
+  // Page number (1-indexed).
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  // Page size (1-100).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Free-text search on code, name, description, colourant, ci_name.
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  // Filter by active status.
+  ActiveFilter active_filter = 4;
+  // Sort field.
+  string sort_by = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "code",
+      "group_name",
+      "sort_order",
+      "created_at"
+    ]
+  }];
+  // Sort order.
+  string sort_order = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+// List response.
+message ListRMGroupsResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Group heads.
+  repeated RMGroupHead data = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// =============================================================================
+// MESSAGES - AddItems / RemoveItems
+// =============================================================================
+
+// AddItemSelection identifies one RM variant to assign to a group. The
+// (item_code, grade_code) pair is the natural key: an item_code with
+// multiple grade_code variants in the sync feed represents distinct
+// rows that can be grouped independently.
+message AddItemSelection {
+  // Item code (required).
+  string item_code = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 50
+  }];
+  // Grade code (optional). Empty matches the variant with NULL / empty
+  // grade_code in the sync feed. Use "" when the row has a single variant.
+  string grade_code = 2 [(buf.validate.field).string.max_len = 40];
+  // V2 optional valuation inputs (per-detail). Backend stores NULL when omitted.
+  optional double valuation_freight_rate = 3 [(buf.validate.field).double.gte = 0];
+  optional double valuation_anti_dumping_pct = 4 [(buf.validate.field).double.gte = 0];
+  optional double valuation_duty_pct = 5 [(buf.validate.field).double.gte = 0];
+  optional double valuation_transport_rate = 6 [(buf.validate.field).double.gte = 0];
+  optional double valuation_default_value = 7 [(buf.validate.field).double.gte = 0];
+}
+
+// Add one or more items to a group. Items already in another active group are
+// returned in `skipped` rather than erroring the whole batch.
+//
+// Prefer `selections` — it carries grade_code which is required to correctly
+// disambiguate multi-variant items. `item_codes` is retained for backwards
+// compatibility; when both are supplied, `selections` wins.
+message AddItemsRequest {
+  // Target group head UUID.
+  string group_head_id = 1 [(buf.validate.field).string.uuid = true];
+  // Item codes to add (legacy: grade_code is resolved server-side).
+  repeated string item_codes = 2 [(buf.validate.field).repeated = {
+    max_items: 500
+    items: {
+      string: {
+        min_len: 1
+        max_len: 50
+      }
+    }
+  }];
+  // Structured selections carrying grade_code. Preferred over item_codes.
+  repeated AddItemSelection selections = 3 [(buf.validate.field).repeated.max_items = 500];
+}
+
+// Add items response.
+message AddItemsResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Details created by this call.
+  repeated RMGroupDetail added = 2;
+  // Items that were skipped because they already belong to another active group.
+  repeated SkippedItem skipped = 3;
+}
+
+// Remove items from a group by detail IDs. The mode controls whether the rows
+// are deactivated (preserved for history) or soft-deleted.
+message RemoveItemsRequest {
+  // Owning group head UUID (validated against each detail).
+  string group_head_id = 1 [(buf.validate.field).string.uuid = true];
+  // Detail UUIDs to remove.
+  repeated string group_detail_ids = 2 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 500
+    items: {
+      string: {uuid: true}
+    }
+  }];
+  // Disposition mode.
+  RemoveItemsMode mode = 3 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+}
+
+// Remove items response.
+message RemoveItemsResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Number of details affected.
+  int32 removed_count = 2;
+}
+
+// V2: Partial update of one detail row's valuation fields + sort_order/is_active.
+message UpdateGroupItemRequest {
+  // Owning group head UUID.
+  string group_head_id = 1 [(buf.validate.field).string.uuid = true];
+  // Detail UUID to update.
+  string group_detail_id = 2 [(buf.validate.field).string.uuid = true];
+  optional double valuation_freight_rate = 3 [(buf.validate.field).double.gte = 0];
+  optional double valuation_anti_dumping_pct = 4 [(buf.validate.field).double.gte = 0];
+  optional double valuation_duty_pct = 5 [(buf.validate.field).double.gte = 0];
+  optional double valuation_transport_rate = 6 [(buf.validate.field).double.gte = 0];
+  optional double valuation_default_value = 7 [(buf.validate.field).double.gte = 0];
+  optional int32 sort_order = 8 [(buf.validate.field).int32.gte = 0];
+  optional bool is_active = 9;
+  // Clear flags for nullable valuation fields (force NULL).
+  bool clear_valuation_freight_rate = 10;
+  bool clear_valuation_anti_dumping_pct = 11;
+  bool clear_valuation_duty_pct = 12;
+  bool clear_valuation_transport_rate = 13;
+  bool clear_valuation_default_value = 14;
+}
+
+// V2: Update one detail response.
+message UpdateGroupItemResponse {
+  common.v1.BaseResponse base = 1;
+  RMGroupDetail data = 2;
+}
+
+// =============================================================================
+// MESSAGES - Ungrouped Items
+// =============================================================================
+
+// List items in the grouping monitor. `scope` selects ungrouped vs grouped;
+// status is evaluated cross-period.
+message ListUngroupedItemsRequest {
+  reserved 3;
+  reserved "period";
+
+  // Page number (1-indexed).
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  // Page size (1-100).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Free-text search on item_code, item_name, grade_code, grade_name and
+  // (when scope = GROUPED) group_code / group_name.
+  string search = 4 [(buf.validate.field).string.max_len = 100];
+  // Selector for ungrouped vs grouped view. UNSPECIFIED = UNGROUPED.
+  RMGroupingScope scope = 5;
+  // Sort column. Empty defaults to item_code. group_*, sort_order and
+  // assigned_at apply only when scope = GROUPED.
+  string sort_by = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "item_code",
+      "item_name",
+      "grade_code",
+      "item_grade",
+      "uom_code",
+      "group_code",
+      "group_name",
+      "sort_order",
+      "assigned_at"
+    ]
+  }];
+  // Sort direction. Empty defaults to asc.
+  string sort_order = 7 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+// ImportGroupItemsRequest bulk-adds items to a specific existing group.
+message ImportGroupItemsRequest {
+  // Target group head ID (UUID).
+  string group_head_id = 1 [(buf.validate.field).string.uuid = true];
+  // Excel file content (.xlsx / .xls). Expected "Items" sheet with columns
+  // item_code (required), grade_code (optional), sort_order (optional).
+  bytes file_content = 2 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 10485760
+  }];
+  // Original filename (format detected by extension).
+  string file_name = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 255
+    pattern: "^[^/\\\\]+\\.(xlsx|xls)$"
+  }];
+}
+
+// ImportGroupItemsResponse summarizes the outcome.
+message ImportGroupItemsResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Number of items successfully added.
+  int32 items_added = 2;
+  // Number of items skipped (already in this or another group, or invalid).
+  int32 items_skipped = 3;
+  // Number of rows that failed to parse at the Excel layer.
+  int32 failed_count = 4;
+  // Parse-level errors (bad item_code format, etc).
+  repeated ImportError errors = 5;
+  // Skip details propagated from AddItems (ownership collisions, etc).
+  repeated SkippedItem skipped = 6;
+}
+
+// DownloadGroupItemsTemplateRequest has no input fields.
+message DownloadGroupItemsTemplateRequest {}
+
+// DownloadGroupItemsTemplateResponse carries the blank template bytes.
+message DownloadGroupItemsTemplateResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Excel file content (.xlsx).
+  bytes file_content = 2;
+  // Suggested filename.
+  string file_name = 3;
+}
+
+// ExportUngroupedItemsRequest filters the grouping monitor export. No pagination.
+message ExportUngroupedItemsRequest {
+  reserved 1;
+  reserved "period";
+
+  // Free-text search on item_code, item_name, grade_code, grade_name and
+  // (when scope = GROUPED) group_code / group_name.
+  string search = 2 [(buf.validate.field).string.max_len = 100];
+  // Selector for ungrouped vs grouped view. UNSPECIFIED = UNGROUPED.
+  RMGroupingScope scope = 3;
+  // Sort column. Empty defaults to item_code.
+  string sort_by = 4 [(buf.validate.field).string = {
+    in: [
+      "",
+      "item_code",
+      "item_name",
+      "grade_code",
+      "item_grade",
+      "uom_code",
+      "group_code",
+      "group_name",
+      "sort_order",
+      "assigned_at"
+    ]
+  }];
+  // Sort direction. Empty defaults to asc.
+  string sort_order = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+// ExportUngroupedItemsResponse carries the Excel bytes + filename.
+message ExportUngroupedItemsResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Excel file content (.xlsx).
+  bytes file_content = 2;
+  // Suggested filename.
+  string file_name = 3;
+}
+
+// Ungrouped items response.
+message ListUngroupedItemsResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Ungrouped items for the requested filters.
+  repeated UngroupedItem data = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// =============================================================================
+// MESSAGES - Group Item Rates
+// =============================================================================
+
+// RMGroupItemRates is one row per item currently in a group with its per-stage
+// Oracle sync rates for a given period. Items with no sync row for the period
+// still appear (all rates 0).
+message RMGroupItemRates {
+  // Item code.
+  string item_code = 1;
+  // Item name (snapshot from detail row).
+  string item_name = 2;
+  // Grade code.
+  string grade_code = 3;
+  // Item grade.
+  string item_grade = 4;
+  // UOM code.
+  string uom_code = 5;
+  // Whether the detail is active.
+  bool is_active = 6;
+  // Whether the detail is a dummy row.
+  bool is_dummy = 7;
+  // Period the rates apply to (YYYYMM), empty when no sync row was found.
+  string period = 8;
+  // CONS qty / value / rate.
+  double cons_qty = 9;
+  double cons_val = 10;
+  double cons_rate = 11;
+  // STORES qty / value / rate.
+  double stores_qty = 12;
+  double stores_val = 13;
+  double stores_rate = 14;
+  // DEPT qty / value / rate.
+  double dept_qty = 15;
+  double dept_val = 16;
+  double dept_rate = 17;
+  // PO_1 qty / value / rate.
+  double last_po_qty1 = 18;
+  double last_po_val1 = 19;
+  double last_po_rate1 = 20;
+  // PO_2 qty / value / rate.
+  double last_po_qty2 = 21;
+  double last_po_val2 = 22;
+  double last_po_rate2 = 23;
+  // PO_3 qty / value / rate.
+  double last_po_qty3 = 24;
+  double last_po_val3 = 25;
+  double last_po_rate3 = 26;
+}
+
+// Fetch per-item rates for a group in a given period.
+message GetRMGroupItemRatesRequest {
+  // Group head UUID.
+  string group_head_id = 1 [(buf.validate.field).string.uuid = true];
+  // Period (YYYYMM).
+  string period = 2 [(buf.validate.field).string = {
+    len: 6
+    pattern: "^\\d{6}$"
+  }];
+}
+
+// Group item rates response.
+message GetRMGroupItemRatesResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Per-item rates, one row per active detail.
+  repeated RMGroupItemRates data = 2;
+}
+
+// =============================================================================
+// MESSAGES - Export / Import / Template
+// =============================================================================
+
+// ExportRMGroupsRequest filters the export. Three mutually-exclusive modes:
+//
+//   - All groups: leave both filters unset (default).
+//   - Filtered:   set `active_filter` (and/or `search`) to narrow the set.
+//   - Selected:   pass an explicit list of group_head_ids; all other filters
+//                 are ignored.
+message ExportRMGroupsRequest {
+  // Filter by active/inactive (UNSPECIFIED = all).
+  ActiveFilter active_filter = 1;
+  // Optional explicit group selection. When non-empty, only these groups
+  // are exported (overrides `active_filter` and `search`).
+  repeated string group_head_ids = 2 [(buf.validate.field).repeated = {
+    items: {
+      string: {uuid: true}
+    }
+  }];
+  // Optional code/name search string. Empty = no search filter.
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+}
+
+// ExportRMGroupsResponse returns a multi-sheet Excel (Groups + Items).
+message ExportRMGroupsResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Excel file content (.xlsx).
+  bytes file_content = 2;
+  // Suggested filename.
+  string file_name = 3;
+}
+
+// ImportRMGroupsRequest accepts a 2-sheet Excel. User may include only the
+// Groups sheet (header-only import), only the Items sheet (detail-only for
+// existing groups), or both.
+message ImportRMGroupsRequest {
+  // Excel file content (.xlsx / .xls).
+  bytes file_content = 1 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 10485760
+  }];
+  // Original filename (format detected by extension).
+  string file_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 255
+    pattern: "^[^/\\\\]+\\.(xlsx|xls)$"
+  }];
+  // How to handle existing groups by `group_code`: "skip" (default) or "update".
+  // Detail rows always additive: items already active in ANOTHER group are
+  // reported as skipped errors; items already in the target group are ignored.
+  string duplicate_action = 3 [(buf.validate.field).string = {
+    in: [
+      "skip",
+      "update"
+    ]
+    min_len: 1
+  }];
+}
+
+// ImportRMGroupsResponse summarizes the outcome.
+message ImportRMGroupsResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Number of group heads created.
+  int32 groups_created = 2;
+  // Number of group heads updated (duplicate_action=update).
+  int32 groups_updated = 3;
+  // Number of group heads skipped (duplicate_action=skip + existed).
+  int32 groups_skipped = 4;
+  // Number of detail items successfully added.
+  int32 items_added = 5;
+  // Number of detail items skipped (already in target group).
+  int32 items_skipped = 6;
+  // Number of failed rows (across both sheets).
+  int32 failed_count = 7;
+  // Per-row errors (reuses finance.v1.ImportError).
+  repeated ImportError errors = 8;
+}
+
+// DownloadRMGroupTemplateRequest has no filters.
+message DownloadRMGroupTemplateRequest {}
+
+// DownloadRMGroupTemplateResponse returns the blank 2-sheet template.
+message DownloadRMGroupTemplateResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Excel template file content (.xlsx).
+  bytes file_content = 2;
+  // Suggested filename.
+  string file_name = 3;
+}
+
+// =============================================================================
+// SERVICE DEFINITION
+// =============================================================================
+
+// RMGroupService manages RM group heads + their item memberships and exposes
+// the "ungrouped items" report that drives the grouping workflow.
+service RMGroupService {
+  // CreateRMGroup creates a new RM group head.
+  rpc CreateRMGroup(CreateRMGroupRequest) returns (CreateRMGroupResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/rm-groups"
+      body: "*"
+    };
+  }
+
+  // GetRMGroup retrieves a group head + its details.
+  rpc GetRMGroup(GetRMGroupRequest) returns (GetRMGroupResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/rm-groups/{group_head_id}"};
+  }
+
+  // UpdateRMGroup applies a partial update to a group head.
+  rpc UpdateRMGroup(UpdateRMGroupRequest) returns (UpdateRMGroupResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/rm-groups/{group_head_id}"
+      body: "*"
+    };
+  }
+
+  // DeleteRMGroup soft-deletes a group head (cascade to its details).
+  rpc DeleteRMGroup(DeleteRMGroupRequest) returns (DeleteRMGroupResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/rm-groups/{group_head_id}"};
+  }
+
+  // ListRMGroups lists group heads with search + filter + pagination.
+  rpc ListRMGroups(ListRMGroupsRequest) returns (ListRMGroupsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/rm-groups"};
+  }
+
+  // AddItems assigns items to a group. Items already in another active group
+  // are returned in `skipped` instead of failing the batch.
+  rpc AddItems(AddItemsRequest) returns (AddItemsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/rm-groups/{group_head_id}/items"
+      body: "*"
+    };
+  }
+
+  // RemoveItems removes details from a group (deactivate or soft-delete).
+  rpc RemoveItems(RemoveItemsRequest) returns (RemoveItemsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/rm-groups/{group_head_id}/items/remove"
+      body: "*"
+    };
+  }
+
+  // V2: UpdateGroupItem updates one detail row's valuation fields + sort/active.
+  rpc UpdateGroupItem(UpdateGroupItemRequest) returns (UpdateGroupItemResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/rm-groups/{group_head_id}/items/{group_detail_id}"
+      body: "*"
+    };
+  }
+
+  // ListUngroupedItems reports items from the sync feed that have no active
+  // group assignment.
+  rpc ListUngroupedItems(ListUngroupedItemsRequest) returns (ListUngroupedItemsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/rm-groups/ungrouped"};
+  }
+
+  // GetRMGroupItemRates returns per-item per-stage rates for every active
+  // detail of a group in a given period.
+  rpc GetRMGroupItemRates(GetRMGroupItemRatesRequest) returns (GetRMGroupItemRatesResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/rm-groups/{group_head_id}/item-rates"};
+  }
+
+  // ExportRMGroups exports all groups + their items to a 2-sheet Excel.
+  rpc ExportRMGroups(ExportRMGroupsRequest) returns (ExportRMGroupsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/rm-groups/export"};
+  }
+
+  // ImportRMGroups imports groups and/or items from a 2-sheet Excel. Users can
+  // include only the Groups sheet, only the Items sheet, or both.
+  rpc ImportRMGroups(ImportRMGroupsRequest) returns (ImportRMGroupsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/rm-groups/import"
+      body: "*"
+    };
+  }
+
+  // DownloadRMGroupTemplate returns a blank 2-sheet Excel with header rows.
+  rpc DownloadRMGroupTemplate(DownloadRMGroupTemplateRequest) returns (DownloadRMGroupTemplateResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/rm-groups/template"};
+  }
+
+  // ExportUngroupedItems exports ungrouped items matching the filter to Excel.
+  rpc ExportUngroupedItems(ExportUngroupedItemsRequest) returns (ExportUngroupedItemsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/rm-groups/ungrouped/export"};
+  }
+
+  // ImportGroupItems bulk-assigns items to ONE existing group from a
+  // one-sheet Excel. Uses the same validation as the interactive AddItems
+  // flow (one item / one active group, sync-feed lookup, idempotent re-add).
+  rpc ImportGroupItems(ImportGroupItemsRequest) returns (ImportGroupItemsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/rm-groups/{group_head_id}/items/import"
+      body: "*"
+    };
+  }
+
+  // DownloadGroupItemsTemplate returns a blank one-sheet Excel with just
+  // the columns ImportGroupItems expects. Paired with ImportGroupItems.
+  rpc DownloadGroupItemsTemplate(DownloadGroupItemsTemplateRequest) returns (DownloadGroupItemsTemplateResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/rm-groups/items/template"};
+  }
+}
