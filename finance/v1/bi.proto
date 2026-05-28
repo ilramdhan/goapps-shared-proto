@@ -545,6 +545,55 @@ message TriggerJobResponse {
   BiJobLog data = 2;
 }
 
+message CreateBiJobRequest {
+  string job_name = 1 [(buf.validate.field).string = {
+    min_len: 2
+    max_len: 120
+    pattern: "^[A-Z][A-Z0-9_]*$"
+  }];
+  string source_code = 2 [(buf.validate.field).string = {
+    min_len: 2
+    max_len: 40
+  }];
+  string target_type = 3 [(buf.validate.field).string = {
+    min_len: 2
+    max_len: 40
+  }];
+  string schedule_cron = 4 [(buf.validate.field).string = {
+    min_len: 9
+    max_len: 50
+  }];
+  string oracle_procedure = 5 [(buf.validate.field).string.max_len = 200];
+  google.protobuf.Struct config = 6;
+  bool is_active = 7;
+}
+
+message CreateBiJobResponse {
+  common.v1.BaseResponse base = 1;
+  BiJob data = 2;
+}
+
+message UpdateBiJobRequest {
+  string job_id = 1 [(buf.validate.field).string.uuid = true];
+  optional string schedule_cron = 2 [(buf.validate.field).string.max_len = 50];
+  optional string oracle_procedure = 3 [(buf.validate.field).string.max_len = 200];
+  optional google.protobuf.Struct config = 4;
+  optional bool is_active = 5;
+}
+
+message UpdateBiJobResponse {
+  common.v1.BaseResponse base = 1;
+  BiJob data = 2;
+}
+
+message DeleteBiJobRequest {
+  string job_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message DeleteBiJobResponse {
+  common.v1.BaseResponse base = 1;
+}
+
 // =================== Excel Upload ===================
 
 message UploadRowError {
@@ -781,6 +830,24 @@ service BiJobService {
       post: "/api/v1/finance/bi/jobs/{job_id}/trigger"
       body: "*"
     };
+  }
+  // CreateBiJob registers a new ETL job in the bi_job registry.
+  rpc CreateBiJob(CreateBiJobRequest) returns (CreateBiJobResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/bi/jobs"
+      body: "*"
+    };
+  }
+  // UpdateBiJob mutates schedule_cron, oracle_procedure, config, or is_active.
+  rpc UpdateBiJob(UpdateBiJobRequest) returns (UpdateBiJobResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/bi/jobs/{job_id}"
+      body: "*"
+    };
+  }
+  // DeleteBiJob soft-disables a job (sets is_active=false, preserves logs).
+  rpc DeleteBiJob(DeleteBiJobRequest) returns (DeleteBiJobResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/bi/jobs/{job_id}"};
   }
 }
 
