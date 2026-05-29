@@ -90,6 +90,8 @@ message Dashboard {
   bool is_active = 22;
   repeated string allowed_role_codes = 23;
   common.v1.AuditInfo audit = 24;
+  bool is_featured = 25;
+  int32 feature_order = 26;
 }
 
 message DataSource {
@@ -363,6 +365,8 @@ message UpdateDashboardRequest {
   optional int32 display_order = 17;
   optional string group_id = 18 [(buf.validate.field).string = {pattern: "^$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"}];
   optional bool is_active = 19;
+  optional bool is_featured = 25;
+  optional int32 feature_order = 26;
 }
 message UpdateDashboardResponse {
   common.v1.BaseResponse base = 1;
@@ -404,6 +408,12 @@ message SetDashboardRolesResponse {
 
 message ListAccessibleDashboardsRequest {}
 message ListAccessibleDashboardsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated Dashboard data = 2;
+}
+
+message ListFeaturedDashboardsRequest {}
+message ListFeaturedDashboardsResponse {
   common.v1.BaseResponse base = 1;
   repeated Dashboard data = 2;
 }
@@ -758,6 +768,10 @@ service DashboardService {
   // ListAccessibleDashboards returns dashboards visible to the calling user (for viewer sidebar).
   rpc ListAccessibleDashboards(ListAccessibleDashboardsRequest) returns (ListAccessibleDashboardsResponse) {
     option (google.api.http) = {get: "/api/v1/finance/bi/dashboards/accessible"};
+  }
+  // ListFeaturedDashboards returns dashboards pinned to the Executive Dashboard landing page.
+  rpc ListFeaturedDashboards(ListFeaturedDashboardsRequest) returns (ListFeaturedDashboardsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/bi/dashboards/featured"};
   }
   // CreateDashboardGroup creates a new dashboard group.
   rpc CreateDashboardGroup(CreateDashboardGroupRequest) returns (CreateDashboardGroupResponse) {
