@@ -218,6 +218,10 @@ message AuthUser {
   string section_id = 10;
   // Department UUID derived from the user's section (empty if no section assigned).
   string department_id = 11;
+  // Section code (human-readable, for DEPT filler eligibility checks).
+  string section_code = 12;
+  // Department code (human-readable, for DEPT filler eligibility checks).
+  string department_code = 13;
 }
 
 // =============================================================================
