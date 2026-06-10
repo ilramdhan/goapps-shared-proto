@@ -315,6 +315,16 @@ message ReopenCostProductRequestResponse {
   CostProductRequest data = 2;
 }
 
+// MarkParameterPending moves ROUTING_DEFINED → PARAMETER_PENDING.
+// Creates fill tasks for every route level attached to this request.
+message MarkParameterPendingRequest {
+  int64 request_id = 1 [(buf.validate.field).int64.gte = 1];
+}
+message MarkParameterPendingResponse {
+  common.v1.BaseResponse base = 1;
+  CostProductRequest data = 2;
+}
+
 // MarkParameterComplete moves PARAMETER_PENDING → PARAMETER_COMPLETE.
 // The handler verifies all promoted products have their required CAPP params
 // filled before allowing the transition.
@@ -374,6 +384,65 @@ message AssignCostProductRequestRequest {
 message AssignCostProductRequestResponse {
   common.v1.BaseResponse base = 1;
   CostProductRequest data = 2;
+}
+
+// ConfirmCostProductRequest advances PARAMETER_COMPLETE → CONFIRMED.
+// Requires finance.product.request.confirm permission.
+message ConfirmCostProductRequestRequest {
+  int64 request_id = 1 [(buf.validate.field).int64.gte = 1];
+}
+message ConfirmCostProductRequestResponse {
+  common.v1.BaseResponse base = 1;
+  CostProductRequest data = 2;
+}
+
+// ApproveCostProductRequest advances CONFIRMED → APPROVED.
+// Requires finance.product.request.approve permission.
+message ApproveCostProductRequestRequest {
+  int64 request_id = 1 [(buf.validate.field).int64.gte = 1];
+  string note = 2 [(buf.validate.field).string.max_len = 1000];
+}
+message ApproveCostProductRequestResponse {
+  common.v1.BaseResponse base = 1;
+  CostProductRequest data = 2;
+}
+
+// ReleaseCostProductRequest advances APPROVED → RELEASED.
+// Requires finance.product.request.release permission.
+// After release the request is locked and ready for the cost calculation engine.
+message ReleaseCostProductRequestRequest {
+  int64 request_id = 1 [(buf.validate.field).int64.gte = 1];
+}
+message ReleaseCostProductRequestResponse {
+  common.v1.BaseResponse base = 1;
+  CostProductRequest data = 2;
+}
+
+// ==========================================================================
+// GetCostProductRequestHistory — approval trace
+// ==========================================================================
+
+// StatusHistoryEntry records a single CPR status transition.
+message StatusHistoryEntry {
+  int64 id = 1;
+  int64 request_id = 2;
+  string from_status = 3;
+  string to_status = 4;
+  string actor_user_id = 5;
+  string actor_name = 6;
+  string note = 7;
+  string created_at = 8;
+}
+
+// GetCostProductRequestHistoryRequest carries the CPR id to query.
+message GetCostProductRequestHistoryRequest {
+  int64 request_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+// GetCostProductRequestHistoryResponse returns the full status-transition timeline.
+message GetCostProductRequestHistoryResponse {
+  common.v1.BaseResponse base = 1;
+  repeated StatusHistoryEntry entries = 2;
 }
 
 service CostProductRequestService {
@@ -447,6 +516,14 @@ service CostProductRequestService {
       body: "*"
     };
   }
+  // MarkParameterPending advances ROUTING_DEFINED → PARAMETER_PENDING and
+  // creates fill tasks for every route level before committing the transition.
+  rpc MarkParameterPending(MarkParameterPendingRequest) returns (MarkParameterPendingResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/cost-product-requests/{request_id}/mark-parameter-pending"
+      body: "*"
+    };
+  }
   // MarkParameterComplete advances PARAMETER_PENDING → PARAMETER_COMPLETE
   // after verifying all promoted products have required params filled.
   rpc MarkParameterComplete(MarkParameterCompleteRequest) returns (MarkParameterCompleteResponse) {
@@ -486,6 +563,32 @@ service CostProductRequestService {
       post: "/api/v1/finance/cost-product-requests/{request_id}/unlink-route"
       body: "*"
     };
+  }
+  // ConfirmCostProductRequest advances PARAMETER_COMPLETE → CONFIRMED.
+  rpc ConfirmCostProductRequest(ConfirmCostProductRequestRequest) returns (ConfirmCostProductRequestResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/cost-product-requests/{request_id}/confirm"
+      body: "*"
+    };
+  }
+  // ApproveCostProductRequest advances CONFIRMED → APPROVED.
+  rpc ApproveCostProductRequest(ApproveCostProductRequestRequest) returns (ApproveCostProductRequestResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/cost-product-requests/{request_id}/approve"
+      body: "*"
+    };
+  }
+  // ReleaseCostProductRequest advances APPROVED → RELEASED.
+  // After release the request is locked and the cost calculation engine can proceed.
+  rpc ReleaseCostProductRequest(ReleaseCostProductRequestRequest) returns (ReleaseCostProductRequestResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/cost-product-requests/{request_id}/release"
+      body: "*"
+    };
+  }
+  // GetCostProductRequestHistory returns the full status-transition timeline for a request.
+  rpc GetCostProductRequestHistory(GetCostProductRequestHistoryRequest) returns (GetCostProductRequestHistoryResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-product-requests/{request_id}/history"};
   }
 }
 
