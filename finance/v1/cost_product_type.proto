@@ -4,6 +4,7 @@ package finance.v1;
 
 import "buf/validate/validate.proto";
 import "common/v1/common.proto";
+import "finance/v1/uom.proto";
 import "google/api/annotations.proto";
 
 // =============================================================================
@@ -97,6 +98,59 @@ message ListCostProductTypesResponse {
   common.v1.PaginationResponse pagination = 3;
 }
 
+// ── Export ──────────────────────────────────────────────────────────────────
+
+message ExportCostProductTypesRequest {
+  string active_filter = 1 [(buf.validate.field).string = {
+    in: [
+      "",
+      "all",
+      "active",
+      "inactive"
+    ]
+  }];
+}
+
+message ExportCostProductTypesResponse {
+  common.v1.BaseResponse base = 1;
+  bytes file_content = 2;
+  string file_name = 3;
+}
+
+// ── Import ───────────────────────────────────────────────────────────────────
+
+message ImportCostProductTypesRequest {
+  bytes file_content = 1 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 10485760
+  }];
+  string file_name = 2 [(buf.validate.field).string.pattern = "(?i)^.+\\.xlsx?$"];
+  string duplicate_action = 3 [(buf.validate.field).string = {
+    in: [
+      "skip",
+      "update",
+      "error"
+    ]
+  }];
+}
+
+message ImportCostProductTypesResponse {
+  common.v1.BaseResponse base = 1;
+  int32 success_count = 2;
+  int32 skipped_count = 3;
+  int32 updated_count = 4;
+  int32 failed_count = 5;
+  repeated ImportError errors = 6;
+}
+
+message DownloadCostProductTypeTemplateRequest {}
+
+message DownloadCostProductTypeTemplateResponse {
+  common.v1.BaseResponse base = 1;
+  bytes file_content = 2;
+  string file_name = 3;
+}
+
 // CostProductTypeService — CRUD master for canonical product types.
 service CostProductTypeService {
   rpc CreateCostProductType(CreateCostProductTypeRequest) returns (CreateCostProductTypeResponse) {
@@ -116,5 +170,20 @@ service CostProductTypeService {
   }
   rpc ListCostProductTypes(ListCostProductTypesRequest) returns (ListCostProductTypesResponse) {
     option (google.api.http) = {get: "/api/v1/finance/cost-product-types"};
+  }
+
+  rpc ExportCostProductTypes(ExportCostProductTypesRequest) returns (ExportCostProductTypesResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-product-types/export"};
+  }
+
+  rpc ImportCostProductTypes(ImportCostProductTypesRequest) returns (ImportCostProductTypesResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/cost-product-types/import"
+      body: "*"
+    };
+  }
+
+  rpc DownloadCostProductTypeTemplate(DownloadCostProductTypeTemplateRequest) returns (DownloadCostProductTypeTemplateResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-product-types/template"};
   }
 }
