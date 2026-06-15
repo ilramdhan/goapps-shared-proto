@@ -615,7 +615,7 @@ message UnlinkRouteResponse {
 
 // ParamValueEntry is one parameter cell in the summary.
 message ParamValueEntry {
-  int64 param_id = 1;
+  string param_id = 1;
   string param_code = 2;
   string param_name = 3;
   string data_type = 4;
