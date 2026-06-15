@@ -636,6 +636,10 @@ message FillLevelSummary {
   int32 filled_params = 5;
   int32 total_params = 6;
   repeated ParamValueEntry params = 7;
+  // last_edited_by is the user who last overrode a param value at this level (empty if no override).
+  string last_edited_by = 8;
+  // last_edited_at is when the most recent override occurred at this level.
+  string last_edited_at = 9;
 }
 
 // ProductParamSummary groups fill levels for one product in the route.

@@ -282,4 +282,42 @@ service CostProductParameterService {
       body: "*"
     };
   }
+
+  // OverrideParamValues allows authorized users to override param values on an unlocked
+  // route. Records an audit log entry, resets fill-task approval when the level has an
+  // approver configured, and emits a single notification summarizing all changed params.
+  rpc OverrideParamValues(OverrideParamValuesRequest) returns (OverrideParamValuesResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/cost-product-requests/{request_id}/params/override"
+      body: "*"
+    };
+  }
+}
+
+// =============================================================================
+// MESSAGES — Override param values (admin override with audit log)
+// =============================================================================
+
+// OverrideParamValueItem holds the new value for a single product+param pair.
+message OverrideParamValueItem {
+  int64 product_sys_id = 1 [(buf.validate.field).int64.gt = 0];
+  string param_id = 2 [(buf.validate.field).string.uuid = true];
+  string value_numeric = 3;
+  string value_text = 4;
+  bool value_flag = 5;
+  bool has_value_flag = 6;
+}
+
+// OverrideParamValuesRequest overrides param values for one fill level of a request.
+// The route must NOT be locked; the caller must hold finance.costing.paramvalue.update.
+message OverrideParamValuesRequest {
+  int64 request_id = 1 [(buf.validate.field).int64.gt = 0];
+  int32 route_level = 2 [(buf.validate.field).int32.gte = 1];
+  repeated OverrideParamValueItem values = 3 [(buf.validate.field).repeated.min_items = 1];
+}
+
+// OverrideParamValuesResponse summarizes the outcome.
+message OverrideParamValuesResponse {
+  common.v1.BaseResponse base = 1;
+  int32 updated_count = 2;
 }
