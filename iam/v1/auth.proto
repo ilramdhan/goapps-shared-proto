@@ -136,6 +136,11 @@ service AuthService {
       body: "*"
     };
   }
+
+  // VerifyPassword checks the user's password without changing any state.
+  // Used by the BFF to gate route lock/unlock before calling Finance.
+  // No HTTP annotation -- BFF-only, not exposed via gRPC-Gateway.
+  rpc VerifyPassword(VerifyPasswordRequest) returns (VerifyPasswordResponse);
 }
 
 // =============================================================================
@@ -504,5 +509,16 @@ message ValidateUnlockPasswordRequest {
 // ValidateUnlockPasswordResponse confirms whether the password is valid.
 message ValidateUnlockPasswordResponse {
   // Standard response metadata. is_success=true means the password matched.
+  common.v1.BaseResponse base = 1;
+}
+
+// VerifyPasswordRequest checks whether the password matches the stored hash.
+message VerifyPasswordRequest {
+  string user_id = 1 [(buf.validate.field).string.uuid = true];
+  string password = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+// VerifyPasswordResponse returns success if password matches; error otherwise.
+message VerifyPasswordResponse {
   common.v1.BaseResponse base = 1;
 }

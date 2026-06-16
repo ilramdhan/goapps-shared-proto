@@ -1,0 +1,182 @@
+syntax = "proto3";
+
+package finance.v1;
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "google/api/annotations.proto";
+
+// =============================================================================
+// CostDataImportService — async import jobs for large costing datasets.
+// =============================================================================
+
+message CostImportJob {
+  int64 job_id = 1;
+  string entity = 2;
+  string status = 3;
+  int32 total_rows = 4;
+  int32 processed = 5;
+  int32 success = 6;
+  int32 failed = 7;
+  int32 skipped = 8;
+  string error_file_url = 9;
+  string created_by = 10;
+  string created_at = 11;
+  string started_at = 12;
+  string completed_at = 13;
+}
+
+message GetCostImportJobRequest {
+  int64 job_id = 1 [(buf.validate.field).int64.gte = 1];
+}
+
+message GetCostImportJobResponse {
+  common.v1.BaseResponse base = 1;
+  CostImportJob data = 2;
+}
+
+message ListCostImportJobsRequest {
+  string entity = 1 [(buf.validate.field).string = {
+    in: [
+      "",
+      "product_type",
+      "parameter",
+      "product_master",
+      "capp",
+      "cpp"
+    ]
+  }];
+  string status = 2 [(buf.validate.field).string = {
+    in: [
+      "",
+      "PENDING",
+      "RUNNING",
+      "DONE",
+      "FAILED",
+      "PARTIAL"
+    ]
+  }];
+  common.v1.PaginationRequest pagination = 3;
+}
+
+message ListCostImportJobsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated CostImportJob data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+message ImportCostApplicableParamsRequest {
+  bytes file_content = 1 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 209715200
+  }];
+  string file_name = 2 [(buf.validate.field).string.pattern = "(?i)^.+\\.xlsx?$"];
+  string duplicate_action = 3 [(buf.validate.field).string = {
+    in: [
+      "skip",
+      "update",
+      "error"
+    ]
+  }];
+}
+
+message ImportCostApplicableParamsResponse {
+  common.v1.BaseResponse base = 1;
+  int64 job_id = 2;
+}
+
+message ImportCostProductParametersRequest {
+  bytes file_content = 1 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 209715200
+  }];
+  string file_name = 2 [(buf.validate.field).string.pattern = "(?i)^.+\\.xlsx?$"];
+  string duplicate_action = 3 [(buf.validate.field).string = {
+    in: [
+      "skip",
+      "update",
+      "error"
+    ]
+  }];
+}
+
+message ImportCostProductParametersResponse {
+  common.v1.BaseResponse base = 1;
+  int64 job_id = 2;
+}
+
+message ExportCostApplicableParamsRequest {
+  string product_type_code = 1 [(buf.validate.field).string.max_len = 5];
+}
+
+message ExportCostApplicableParamsResponse {
+  common.v1.BaseResponse base = 1;
+  bytes file_content = 2;
+  string file_name = 3;
+}
+
+message ExportCostProductParametersRequest {
+  string product_type_code = 1 [(buf.validate.field).string.max_len = 5];
+}
+
+message ExportCostProductParametersResponse {
+  common.v1.BaseResponse base = 1;
+  bytes file_content = 2;
+  string file_name = 3;
+}
+
+message DownloadCostApplicableParamTemplateRequest {}
+
+message DownloadCostApplicableParamTemplateResponse {
+  common.v1.BaseResponse base = 1;
+  bytes file_content = 2;
+  string file_name = 3;
+}
+
+message DownloadCostProductParameterTemplateRequest {}
+
+message DownloadCostProductParameterTemplateResponse {
+  common.v1.BaseResponse base = 1;
+  bytes file_content = 2;
+  string file_name = 3;
+}
+
+service CostDataImportService {
+  rpc GetCostImportJob(GetCostImportJobRequest) returns (GetCostImportJobResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/costing/import-jobs/{job_id}"};
+  }
+
+  rpc ListCostImportJobs(ListCostImportJobsRequest) returns (ListCostImportJobsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/costing/import-jobs"};
+  }
+
+  rpc ImportCostApplicableParams(ImportCostApplicableParamsRequest) returns (ImportCostApplicableParamsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/costing/capp/import"
+      body: "*"
+    };
+  }
+
+  rpc ExportCostApplicableParams(ExportCostApplicableParamsRequest) returns (ExportCostApplicableParamsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/costing/capp/export"};
+  }
+
+  rpc DownloadCostApplicableParamTemplate(DownloadCostApplicableParamTemplateRequest) returns (DownloadCostApplicableParamTemplateResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/costing/capp/template"};
+  }
+
+  rpc ImportCostProductParameters(ImportCostProductParametersRequest) returns (ImportCostProductParametersResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/costing/cpp/import"
+      body: "*"
+    };
+  }
+
+  rpc ExportCostProductParameters(ExportCostProductParametersRequest) returns (ExportCostProductParametersResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/costing/cpp/export"};
+  }
+
+  rpc DownloadCostProductParameterTemplate(DownloadCostProductParameterTemplateRequest) returns (DownloadCostProductParameterTemplateResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/costing/cpp/template"};
+  }
+}

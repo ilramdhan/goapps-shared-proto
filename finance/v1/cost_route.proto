@@ -19,6 +19,11 @@ message CostRouteHead {
   int64 promoted_from_draft_id = 7;
   int32 cyl_type_id = 8;
   string notes = 9;
+  // Lock tracking -- populated when routing_status = "LOCKED".
+  string locked_by = 17;
+  string locked_at = 18;
+  string unlocked_by = 19;
+  string unlocked_at = 20;
   common.v1.AuditInfo audit = 16;
 }
 

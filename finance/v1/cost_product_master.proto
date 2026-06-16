@@ -31,6 +31,10 @@ message CostProductMaster {
   string erp_linked_by = 14;
   bool is_active = 15;
   common.v1.AuditInfo audit = 16;
+  string shade_name = 17;
+  string flex_01 = 18;
+  string flex_02 = 19;
+  string flex_03 = 20;
 }
 
 // =============================================================================
@@ -169,6 +173,57 @@ message ListCostProductMastersResponse {
   common.v1.PaginationResponse pagination = 3;
 }
 
+// ── Export ───────────────────────────────────────────────────────────────────
+
+message ExportCostProductMastersRequest {
+  string product_type_code = 1 [(buf.validate.field).string.max_len = 5];
+  string active_filter = 2 [(buf.validate.field).string = {
+    in: [
+      "",
+      "all",
+      "active",
+      "inactive"
+    ]
+  }];
+  string search = 3 [(buf.validate.field).string.max_len = 200];
+}
+
+message ExportCostProductMastersResponse {
+  common.v1.BaseResponse base = 1;
+  bytes file_content = 2;
+  string file_name = 3;
+}
+
+// ── Async Import ──────────────────────────────────────────────────────────────
+
+message ImportCostProductMastersRequest {
+  bytes file_content = 1 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 52428800
+  }];
+  string file_name = 2 [(buf.validate.field).string.pattern = "(?i)^.+\\.xlsx?$"];
+  string duplicate_action = 3 [(buf.validate.field).string = {
+    in: [
+      "skip",
+      "update",
+      "error"
+    ]
+  }];
+}
+
+message ImportCostProductMastersResponse {
+  common.v1.BaseResponse base = 1;
+  int64 job_id = 2;
+}
+
+message DownloadCostProductMasterTemplateRequest {}
+
+message DownloadCostProductMasterTemplateResponse {
+  common.v1.BaseResponse base = 1;
+  bytes file_content = 2;
+  string file_name = 3;
+}
+
 service CostProductMasterService {
   rpc CreateCostProductMaster(CreateCostProductMasterRequest) returns (CreateCostProductMasterResponse) {
     option (google.api.http) = {
@@ -199,5 +254,20 @@ service CostProductMasterService {
   }
   rpc ListCostProductMasters(ListCostProductMastersRequest) returns (ListCostProductMastersResponse) {
     option (google.api.http) = {get: "/api/v1/finance/cost-product-master"};
+  }
+
+  rpc ExportCostProductMasters(ExportCostProductMastersRequest) returns (ExportCostProductMastersResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-product-masters/export"};
+  }
+
+  rpc ImportCostProductMasters(ImportCostProductMastersRequest) returns (ImportCostProductMastersResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/cost-product-masters/import"
+      body: "*"
+    };
+  }
+
+  rpc DownloadCostProductMasterTemplate(DownloadCostProductMasterTemplateRequest) returns (DownloadCostProductMasterTemplateResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-product-masters/template"};
   }
 }

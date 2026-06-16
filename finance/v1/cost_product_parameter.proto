@@ -282,4 +282,76 @@ service CostProductParameterService {
       body: "*"
     };
   }
+
+  // OverrideParamValues allows authorized users to override param values on an unlocked
+  // route. Records an audit log entry, resets fill-task approval when the level has an
+  // approver configured, and emits a single notification summarizing all changed params.
+  // ListParamEditLog returns the override audit history for one fill level of a CPR.
+  // Entries are ordered newest-first. Requires finance.costing.paramvalue.update.
+  rpc ListParamEditLog(ListParamEditLogRequest) returns (ListParamEditLogResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-product-parameters/edit-log"};
+  }
+
+  rpc OverrideParamValues(OverrideParamValuesRequest) returns (OverrideParamValuesResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/cost-product-requests/{request_id}/params/override"
+      body: "*"
+    };
+  }
+}
+
+// =============================================================================
+// MESSAGES — Override param values (admin override with audit log)
+// =============================================================================
+
+// OverrideParamValueItem holds the new value for a single product+param pair.
+message OverrideParamValueItem {
+  int64 product_sys_id = 1 [(buf.validate.field).int64.gt = 0];
+  string param_id = 2 [(buf.validate.field).string.uuid = true];
+  string value_numeric = 3;
+  string value_text = 4;
+  bool value_flag = 5;
+  bool has_value_flag = 6;
+}
+
+// OverrideParamValuesRequest overrides param values for one fill level of a request.
+// The route must NOT be locked; the caller must hold finance.costing.paramvalue.update.
+message OverrideParamValuesRequest {
+  int64 request_id = 1 [(buf.validate.field).int64.gt = 0];
+  int32 route_level = 2 [(buf.validate.field).int32.gte = 1];
+  repeated OverrideParamValueItem values = 3 [(buf.validate.field).repeated.min_items = 1];
+}
+
+// OverrideParamValuesResponse summarizes the outcome.
+message OverrideParamValuesResponse {
+  common.v1.BaseResponse base = 1;
+  int32 updated_count = 2;
+}
+
+// =============================================================================
+// MESSAGES — Param Edit Log
+// =============================================================================
+
+// ParamEditLogEntry is one record of a param value change by an authorized user.
+message ParamEditLogEntry {
+  string param_code = 1;
+  // Human-readable old/new values; empty string means the field had no value.
+  string old_value = 2;
+  string new_value = 3;
+  // Display name of the user who made the change.
+  string changed_by = 4;
+  // RFC-3339 timestamp.
+  string changed_at = 5;
+}
+
+// ListParamEditLogRequest requests the override audit history for one fill level.
+message ListParamEditLogRequest {
+  int64 request_id = 1 [(buf.validate.field).int64.gt = 0];
+  int32 route_level = 2 [(buf.validate.field).int32.gte = 1];
+}
+
+// ListParamEditLogResponse returns entries ordered newest-first.
+message ListParamEditLogResponse {
+  common.v1.BaseResponse base = 1;
+  repeated ParamEditLogEntry entries = 2;
 }
