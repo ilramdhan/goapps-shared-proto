@@ -1,0 +1,1743 @@
+syntax = "proto3";
+
+package finance.v1;
+
+// Note: go_package is managed by buf.gen.yaml managed mode
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "finance/v1/uom.proto";
+import "google/api/annotations.proto";
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+// MCTypeFilter filters machines by machine type.
+enum MCTypeFilter {
+  MC_TYPE_FILTER_UNSPECIFIED = 0; // No filter — show all types.
+  MC_TYPE_FILTER_DTY = 1; // Draw Texturing Yarn machines.
+  MC_TYPE_FILTER_POY = 2; // Partially Oriented Yarn machines.
+  MC_TYPE_FILTER_FDY = 3; // Fully Drawn Yarn machines.
+  MC_TYPE_FILTER_PTY = 4; // Polypropylene Texturing Yarn machines.
+  MC_TYPE_FILTER_SDY = 5; // Semi-Dull Yarn machines.
+  MC_TYPE_FILTER_TTY = 6; // Twisted Textured Yarn machines.
+}
+
+// =============================================================================
+// MESSAGES — Machine
+// =============================================================================
+
+// Machine represents a yarn machine master record.
+message Machine {
+  // UUID primary key.
+  string machine_id = 1;
+  // Unique machine code. Immutable after creation.
+  string machine_code = 2;
+  // Display name.
+  string machine_name = 3;
+  // Machine type (DTY, POY, FDY, etc.).
+  string mc_type = 4;
+  // Physical location (plant/building/floor).
+  string mc_location = 5;
+  // Number of spindle positions.
+  int32 no_of_position = 6;
+  // Number of ends per position.
+  int32 no_of_end = 7;
+  // Machine speed in m/min.
+  double mc_speed = 8;
+  // Optional machine RPM.
+  optional double machine_rpm = 9;
+  // Machine efficiency as a percentage (default 95).
+  double mc_efficiency = 10;
+  // Optional power cost per day in USD.
+  optional double power_per_day = 11;
+  // Whether the record is active.
+  bool is_active = 12;
+  // Optional notes.
+  string notes = 13;
+  // Audit metadata.
+  common.v1.AuditInfo audit = 16;
+}
+
+// CreateMachineRequest is the request for creating a machine.
+message CreateMachineRequest {
+  // Unique machine code (max 30 chars).
+  string machine_code = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 30
+  }];
+  // Display name (max 100 chars).
+  string machine_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Machine type (max 30 chars).
+  string mc_type = 3 [(buf.validate.field).string.max_len = 30];
+  // Physical location (max 100 chars).
+  string mc_location = 4 [(buf.validate.field).string.max_len = 100];
+  // Number of spindle positions (≥ 0).
+  int32 no_of_position = 5 [(buf.validate.field).int32.gte = 0];
+  // Number of ends per position (≥ 1).
+  int32 no_of_end = 6 [(buf.validate.field).int32.gte = 1];
+  // Machine speed in m/min (≥ 0).
+  double mc_speed = 7 [(buf.validate.field).double.gte = 0];
+  // Optional machine RPM.
+  optional double machine_rpm = 8;
+  // Machine efficiency percentage (0-100).
+  double mc_efficiency = 9 [(buf.validate.field).double = {
+    gte: 0
+    lte: 100
+  }];
+  // Optional power cost per day in USD.
+  optional double power_per_day = 10;
+  // Optional notes (max 1000 chars).
+  string notes = 11 [(buf.validate.field).string.max_len = 1000];
+}
+
+// CreateMachineResponse is the response for creating a machine.
+message CreateMachineResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Created machine data.
+  Machine data = 2;
+}
+
+// GetMachineRequest is the request for retrieving a machine by ID.
+message GetMachineRequest {
+  // Machine UUID.
+  string machine_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetMachineResponse is the response for retrieving a machine.
+message GetMachineResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Machine data.
+  Machine data = 2;
+}
+
+// UpdateMachineRequest is the request for updating a machine.
+message UpdateMachineRequest {
+  // Machine UUID.
+  string machine_id = 1 [(buf.validate.field).string.uuid = true];
+  // Updated display name (max 100 chars).
+  optional string machine_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Updated machine type (max 30 chars).
+  optional string mc_type = 3 [(buf.validate.field).string.max_len = 30];
+  // Updated physical location (max 100 chars).
+  optional string mc_location = 4 [(buf.validate.field).string.max_len = 100];
+  // Updated number of spindle positions.
+  optional int32 no_of_position = 5 [(buf.validate.field).int32.gte = 0];
+  // Updated number of ends per position.
+  optional int32 no_of_end = 6 [(buf.validate.field).int32.gte = 1];
+  // Updated machine speed.
+  optional double mc_speed = 7 [(buf.validate.field).double.gte = 0];
+  // Updated machine RPM.
+  optional double machine_rpm = 8;
+  // Updated machine efficiency percentage.
+  optional double mc_efficiency = 9 [(buf.validate.field).double = {
+    gte: 0
+    lte: 100
+  }];
+  // Updated power cost per day.
+  optional double power_per_day = 10;
+  // Updated notes (max 1000 chars).
+  optional string notes = 11 [(buf.validate.field).string.max_len = 1000];
+  // Updated active status.
+  optional bool is_active = 12;
+}
+
+// UpdateMachineResponse is the response for updating a machine.
+message UpdateMachineResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated machine data.
+  Machine data = 2;
+}
+
+// DeleteMachineRequest is the request for soft-deleting a machine.
+message DeleteMachineRequest {
+  // Machine UUID.
+  string machine_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteMachineResponse is the response for soft-deleting a machine.
+message DeleteMachineResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+}
+
+// ListMachinesRequest is the request for listing machines.
+message ListMachinesRequest {
+  // Page number (≥ 1).
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  // Page size (1-100).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Full-text search across code and name.
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  // Filter by machine type.
+  string mc_type_filter = 4 [(buf.validate.field).string.max_len = 30];
+  // Filter by active status.
+  ActiveFilter active_filter = 5;
+  // Sort field.
+  string sort_by = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "mc_code",
+      "mc_name",
+      "mc_type",
+      "created_at"
+    ]
+  }];
+  // Sort direction.
+  string sort_order = 7 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+// ListMachinesResponse is the response for listing machines.
+message ListMachinesResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Machine records.
+  repeated Machine data = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ExportMachinesRequest is the request for exporting machines to Excel.
+message ExportMachinesRequest {
+  // Filter by active status.
+  ActiveFilter active_filter = 1;
+}
+
+// ExportMachinesResponse is the response for exporting machines.
+message ExportMachinesResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Excel file content.
+  bytes file_content = 2;
+  // Excel file name.
+  string file_name = 3;
+}
+
+// ImportMachinesRequest is the request for importing machines from Excel.
+message ImportMachinesRequest {
+  // Excel file content (max 10 MB).
+  bytes file_content = 1 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 10485760
+  }];
+  // Excel file name.
+  string file_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 255
+  }];
+  // How to handle duplicate codes.
+  string duplicate_action = 3 [(buf.validate.field).string = {
+    in: [
+      "skip",
+      "update",
+      "error"
+    ]
+  }];
+}
+
+// ImportMachinesResponse is the response for importing machines.
+message ImportMachinesResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Number of successfully created records.
+  int32 success_count = 2;
+  // Number of skipped records.
+  int32 skipped_count = 3;
+  // Number of failed records.
+  int32 failed_count = 4;
+  // Per-row import errors.
+  repeated ImportError errors = 5;
+}
+
+// DownloadMachineTemplateRequest is the request for downloading the import template.
+message DownloadMachineTemplateRequest {}
+
+// DownloadMachineTemplateResponse is the response for downloading the import template.
+message DownloadMachineTemplateResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Excel template file content.
+  bytes file_content = 2;
+  // Excel file name.
+  string file_name = 3;
+}
+
+// =============================================================================
+// MESSAGES — Box Bobbin Cost
+// =============================================================================
+
+// BoxBobbinCostRate represents a period-specific rate for a Box Bobbin Cost config.
+message BoxBobbinCostRate {
+  // UUID primary key.
+  string bbcr_id = 1;
+  // Parent config UUID.
+  string bbcr_bbc_id = 2;
+  // Period identifier (YYYYMM).
+  string bbcr_period = 3;
+  // Bobbin marketing rate (USD/bobbin).
+  double bbcr_bob_rate_mkt = 4;
+  // Box marketing rate (USD/box).
+  double bbcr_box_rate_mkt = 5;
+  // Optional bobbin valuation rate (falls back to mkt for ACTUAL CalcType).
+  optional double bbcr_bob_rate_val = 6;
+  // Optional box valuation rate (falls back to mkt for ACTUAL CalcType).
+  optional double bbcr_box_rate_val = 7;
+  // Audit metadata.
+  common.v1.AuditInfo audit = 16;
+}
+
+// BoxBobbinCost represents a packing configuration master record.
+message BoxBobbinCost {
+  // UUID primary key.
+  string bbc_id = 1;
+  // Unique config code. Immutable after creation.
+  string bbc_code = 2;
+  // Display name.
+  string bbc_name = 3;
+  // Config type (CAPTIVE or DELIVERY).
+  string bbc_type = 4;
+  // Number of bobbins per box.
+  int32 no_of_bob = 5;
+  // Whether the record is active.
+  bool is_active = 6;
+  // Optional notes.
+  string notes = 7;
+  // Period-specific rate entries.
+  repeated BoxBobbinCostRate rates = 8;
+  // Audit metadata.
+  common.v1.AuditInfo audit = 16;
+}
+
+// CreateBoxBobbinCostRequest is the request for creating a Box Bobbin Cost config.
+message CreateBoxBobbinCostRequest {
+  // Unique config code (max 30 chars).
+  string bbc_code = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 30
+  }];
+  // Display name (max 100 chars).
+  string bbc_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Config type (max 20 chars).
+  string bbc_type = 3 [(buf.validate.field).string.max_len = 20];
+  // Number of bobbins per box (≥ 1).
+  int32 no_of_bob = 4 [(buf.validate.field).int32.gte = 1];
+  // Optional notes (max 1000 chars).
+  string notes = 5 [(buf.validate.field).string.max_len = 1000];
+}
+
+// CreateBoxBobbinCostResponse is the response for creating a Box Bobbin Cost config.
+message CreateBoxBobbinCostResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Created config data.
+  BoxBobbinCost data = 2;
+}
+
+// GetBoxBobbinCostRequest is the request for retrieving a Box Bobbin Cost config by ID.
+message GetBoxBobbinCostRequest {
+  // Config UUID.
+  string bbc_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetBoxBobbinCostResponse is the response for retrieving a Box Bobbin Cost config.
+message GetBoxBobbinCostResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Config data including rates.
+  BoxBobbinCost data = 2;
+}
+
+// UpdateBoxBobbinCostRequest is the request for updating a Box Bobbin Cost config.
+message UpdateBoxBobbinCostRequest {
+  // Config UUID.
+  string bbc_id = 1 [(buf.validate.field).string.uuid = true];
+  // Updated display name (max 100 chars).
+  optional string bbc_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Updated config type (max 20 chars).
+  optional string bbc_type = 3 [(buf.validate.field).string.max_len = 20];
+  // Updated number of bobbins per box.
+  optional int32 no_of_bob = 4 [(buf.validate.field).int32.gte = 1];
+  // Updated notes (max 1000 chars).
+  optional string notes = 5 [(buf.validate.field).string.max_len = 1000];
+  // Updated active status.
+  optional bool is_active = 6;
+}
+
+// UpdateBoxBobbinCostResponse is the response for updating a Box Bobbin Cost config.
+message UpdateBoxBobbinCostResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated config data.
+  BoxBobbinCost data = 2;
+}
+
+// DeleteBoxBobbinCostRequest is the request for soft-deleting a Box Bobbin Cost config.
+message DeleteBoxBobbinCostRequest {
+  // Config UUID.
+  string bbc_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteBoxBobbinCostResponse is the response for soft-deleting a Box Bobbin Cost config.
+message DeleteBoxBobbinCostResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+}
+
+// ListBoxBobbinCostsRequest is the request for listing Box Bobbin Cost configs.
+message ListBoxBobbinCostsRequest {
+  // Page number (≥ 1).
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  // Page size (1-100).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Full-text search across code and name.
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  // Filter by config type.
+  string bbc_type = 4 [(buf.validate.field).string.max_len = 20];
+  // Filter by active status.
+  ActiveFilter active_filter = 5;
+  // Sort field.
+  string sort_by = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "bbc_code",
+      "bbc_name",
+      "bbc_type",
+      "created_at"
+    ]
+  }];
+  // Sort direction.
+  string sort_order = 7 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+// ListBoxBobbinCostsResponse is the response for listing Box Bobbin Cost configs.
+message ListBoxBobbinCostsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Config records.
+  repeated BoxBobbinCost data = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// CreateBoxBobbinCostRateRequest is the request for adding a rate entry.
+message CreateBoxBobbinCostRateRequest {
+  // Parent config UUID.
+  string bbc_id = 1 [(buf.validate.field).string.uuid = true];
+  // Period identifier (YYYYMM).
+  string bbcr_period = 2 [(buf.validate.field).string = {
+    len: 6
+    pattern: "^[0-9]{6}$"
+  }];
+  // Bobbin marketing rate (≥ 0).
+  double bbcr_bob_rate_mkt = 3 [(buf.validate.field).double.gte = 0];
+  // Box marketing rate (≥ 0).
+  double bbcr_box_rate_mkt = 4 [(buf.validate.field).double.gte = 0];
+  // Optional bobbin valuation rate.
+  optional double bbcr_bob_rate_val = 5;
+  // Optional box valuation rate.
+  optional double bbcr_box_rate_val = 6;
+}
+
+// CreateBoxBobbinCostRateResponse is the response for adding a rate entry.
+message CreateBoxBobbinCostRateResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Created rate entry.
+  BoxBobbinCostRate data = 2;
+}
+
+// DeleteBoxBobbinCostRateRequest is the request for removing a rate entry.
+message DeleteBoxBobbinCostRateRequest {
+  // Parent config UUID.
+  string bbc_id = 1 [(buf.validate.field).string.uuid = true];
+  // Rate entry UUID.
+  string bbcr_id = 2 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteBoxBobbinCostRateResponse is the response for removing a rate entry.
+message DeleteBoxBobbinCostRateResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+}
+
+// ExportBoxBobbinCostsRequest is the request for exporting configs to Excel.
+message ExportBoxBobbinCostsRequest {
+  // Filter by active status.
+  ActiveFilter active_filter = 1;
+}
+
+// ExportBoxBobbinCostsResponse is the response for exporting configs.
+message ExportBoxBobbinCostsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Excel file content.
+  bytes file_content = 2;
+  // Excel file name.
+  string file_name = 3;
+}
+
+// ImportBoxBobbinCostsRequest is the request for importing configs from Excel.
+message ImportBoxBobbinCostsRequest {
+  // Excel file content (max 10 MB).
+  bytes file_content = 1 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 10485760
+  }];
+  // Excel file name.
+  string file_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 255
+  }];
+  // How to handle duplicate codes.
+  string duplicate_action = 3 [(buf.validate.field).string = {
+    in: [
+      "skip",
+      "update",
+      "error"
+    ]
+  }];
+}
+
+// ImportBoxBobbinCostsResponse is the response for importing configs.
+message ImportBoxBobbinCostsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Number of successfully created records.
+  int32 success_count = 2;
+  // Number of skipped records.
+  int32 skipped_count = 3;
+  // Number of failed records.
+  int32 failed_count = 4;
+  // Per-row import errors.
+  repeated ImportError errors = 5;
+}
+
+// DownloadBoxBobbinCostTemplateRequest is the request for downloading the import template.
+message DownloadBoxBobbinCostTemplateRequest {}
+
+// DownloadBoxBobbinCostTemplateResponse is the response for downloading the import template.
+message DownloadBoxBobbinCostTemplateResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Excel template file content.
+  bytes file_content = 2;
+  // Excel file name.
+  string file_name = 3;
+}
+
+// =============================================================================
+// MESSAGES — Intermingling
+// =============================================================================
+
+// Intermingling represents an intermingling cost lookup record.
+message Intermingling {
+  // UUID primary key.
+  string intm_id = 1;
+  // Unique intermingling code (HIM, SIM, LIM, etc.). Immutable after creation.
+  string intm_code = 2;
+  // Display name.
+  string intm_name = 3;
+  // Cost per kg in USD.
+  double intm_cost_per_kg = 4;
+  // Whether the record is active.
+  bool is_active = 5;
+  // Optional notes.
+  string notes = 6;
+  // Audit metadata.
+  common.v1.AuditInfo audit = 16;
+}
+
+// CreateInterminglingRequest is the request for creating an intermingling record.
+message CreateInterminglingRequest {
+  // Unique code (max 20 chars).
+  string intm_code = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  // Display name (max 100 chars).
+  string intm_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Cost per kg in USD (≥ 0).
+  double intm_cost_per_kg = 3 [(buf.validate.field).double.gte = 0];
+  // Optional notes (max 1000 chars).
+  string notes = 4 [(buf.validate.field).string.max_len = 1000];
+}
+
+// CreateInterminglingResponse is the response for creating an intermingling record.
+message CreateInterminglingResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Created intermingling data.
+  Intermingling data = 2;
+}
+
+// GetInterminglingRequest is the request for retrieving an intermingling record by ID.
+message GetInterminglingRequest {
+  // Intermingling UUID.
+  string intm_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetInterminglingResponse is the response for retrieving an intermingling record.
+message GetInterminglingResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Intermingling data.
+  Intermingling data = 2;
+}
+
+// UpdateInterminglingRequest is the request for updating an intermingling record.
+message UpdateInterminglingRequest {
+  // Intermingling UUID.
+  string intm_id = 1 [(buf.validate.field).string.uuid = true];
+  // Updated display name (max 100 chars).
+  optional string intm_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Updated cost per kg.
+  optional double intm_cost_per_kg = 3 [(buf.validate.field).double.gte = 0];
+  // Updated notes (max 1000 chars).
+  optional string notes = 4 [(buf.validate.field).string.max_len = 1000];
+  // Updated active status.
+  optional bool is_active = 5;
+}
+
+// UpdateInterminglingResponse is the response for updating an intermingling record.
+message UpdateInterminglingResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated intermingling data.
+  Intermingling data = 2;
+}
+
+// DeleteInterminglingRequest is the request for soft-deleting an intermingling record.
+message DeleteInterminglingRequest {
+  // Intermingling UUID.
+  string intm_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteInterminglingResponse is the response for soft-deleting an intermingling record.
+message DeleteInterminglingResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+}
+
+// ListInterminglingsRequest is the request for listing intermingling records.
+message ListInterminglingsRequest {
+  // Page number (≥ 1).
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  // Page size (1-100).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Full-text search across code and name.
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  // Filter by active status.
+  ActiveFilter active_filter = 4;
+  // Sort field.
+  string sort_by = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "intm_code",
+      "intm_name",
+      "intm_cost_per_kg",
+      "created_at"
+    ]
+  }];
+  // Sort direction.
+  string sort_order = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+// ListInterminglingsResponse is the response for listing intermingling records.
+message ListInterminglingsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Intermingling records.
+  repeated Intermingling data = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ExportInterminglingsRequest is the request for exporting intermingling records to Excel.
+message ExportInterminglingsRequest {
+  // Filter by active status.
+  ActiveFilter active_filter = 1;
+}
+
+// ExportInterminglingsResponse is the response for exporting intermingling records.
+message ExportInterminglingsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Excel file content.
+  bytes file_content = 2;
+  // Excel file name.
+  string file_name = 3;
+}
+
+// ImportInterminglingsRequest is the request for importing intermingling records from Excel.
+message ImportInterminglingsRequest {
+  // Excel file content (max 10 MB).
+  bytes file_content = 1 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 10485760
+  }];
+  // Excel file name.
+  string file_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 255
+  }];
+  // How to handle duplicate codes.
+  string duplicate_action = 3 [(buf.validate.field).string = {
+    in: [
+      "skip",
+      "update",
+      "error"
+    ]
+  }];
+}
+
+// ImportInterminglingsResponse is the response for importing intermingling records.
+message ImportInterminglingsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Number of successfully created records.
+  int32 success_count = 2;
+  // Number of skipped records.
+  int32 skipped_count = 3;
+  // Number of failed records.
+  int32 failed_count = 4;
+  // Per-row import errors.
+  repeated ImportError errors = 5;
+}
+
+// DownloadInterminglingTemplateRequest is the request for downloading the import template.
+message DownloadInterminglingTemplateRequest {}
+
+// DownloadInterminglingTemplateResponse is the response for downloading the import template.
+message DownloadInterminglingTemplateResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Excel template file content.
+  bytes file_content = 2;
+  // Excel file name.
+  string file_name = 3;
+}
+
+// =============================================================================
+// MESSAGES — Product Grade
+// =============================================================================
+
+// ProductGrade represents a quality-loss configuration preset.
+message ProductGrade {
+  // UUID primary key.
+  string pg_id = 1;
+  // Unique code. Immutable after creation.
+  string pg_code = 2;
+  // Display name.
+  string pg_name = 3;
+  // Optional description.
+  string pg_description = 4;
+  // Percentage output as BC grade.
+  double bc_perc = 5;
+  // Percentage output as Non-Standard.
+  double non_std_perc = 6;
+  // Percentage of value recovered from BC grade.
+  double bc_recovery_rate = 7;
+  // Whether the record is active.
+  bool is_active = 8;
+  // Optional notes.
+  string notes = 9;
+  // Audit metadata.
+  common.v1.AuditInfo audit = 16;
+}
+
+// CreateProductGradeRequest is the request for creating a Product Grade.
+message CreateProductGradeRequest {
+  // Unique code (max 30 chars).
+  string pg_code = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 30
+  }];
+  // Display name (max 100 chars).
+  string pg_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Optional description.
+  string pg_description = 3 [(buf.validate.field).string.max_len = 1000];
+  // Percentage output as BC grade (0-100).
+  double bc_perc = 4 [(buf.validate.field).double = {
+    gte: 0
+    lte: 100
+  }];
+  // Percentage output as Non-Standard (0-100).
+  double non_std_perc = 5 [(buf.validate.field).double = {
+    gte: 0
+    lte: 100
+  }];
+  // Recovery rate for BC grade (0-100).
+  double bc_recovery_rate = 6 [(buf.validate.field).double = {
+    gte: 0
+    lte: 100
+  }];
+  // Optional notes (max 1000 chars).
+  string notes = 7 [(buf.validate.field).string.max_len = 1000];
+}
+
+// CreateProductGradeResponse is the response for creating a Product Grade.
+message CreateProductGradeResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Created Product Grade data.
+  ProductGrade data = 2;
+}
+
+// GetProductGradeRequest is the request for retrieving a Product Grade by ID.
+message GetProductGradeRequest {
+  // Product Grade UUID.
+  string pg_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetProductGradeResponse is the response for retrieving a Product Grade.
+message GetProductGradeResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Product Grade data.
+  ProductGrade data = 2;
+}
+
+// UpdateProductGradeRequest is the request for updating a Product Grade.
+message UpdateProductGradeRequest {
+  // Product Grade UUID.
+  string pg_id = 1 [(buf.validate.field).string.uuid = true];
+  // Updated display name (max 100 chars).
+  optional string pg_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Updated description.
+  optional string pg_description = 3 [(buf.validate.field).string.max_len = 1000];
+  // Updated BC percentage.
+  optional double bc_perc = 4 [(buf.validate.field).double = {
+    gte: 0
+    lte: 100
+  }];
+  // Updated Non-Standard percentage.
+  optional double non_std_perc = 5 [(buf.validate.field).double = {
+    gte: 0
+    lte: 100
+  }];
+  // Updated BC recovery rate.
+  optional double bc_recovery_rate = 6 [(buf.validate.field).double = {
+    gte: 0
+    lte: 100
+  }];
+  // Updated notes (max 1000 chars).
+  optional string notes = 7 [(buf.validate.field).string.max_len = 1000];
+  // Updated active status.
+  optional bool is_active = 8;
+}
+
+// UpdateProductGradeResponse is the response for updating a Product Grade.
+message UpdateProductGradeResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated Product Grade data.
+  ProductGrade data = 2;
+}
+
+// DeleteProductGradeRequest is the request for soft-deleting a Product Grade.
+message DeleteProductGradeRequest {
+  // Product Grade UUID.
+  string pg_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteProductGradeResponse is the response for soft-deleting a Product Grade.
+message DeleteProductGradeResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+}
+
+// ListProductGradesRequest is the request for listing Product Grades.
+message ListProductGradesRequest {
+  // Page number (≥ 1).
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  // Page size (1-100).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Full-text search across code and name.
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  // Filter by active status.
+  ActiveFilter active_filter = 4;
+  // Sort field.
+  string sort_by = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "pg_code",
+      "pg_name",
+      "bc_perc",
+      "created_at"
+    ]
+  }];
+  // Sort direction.
+  string sort_order = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+// ListProductGradesResponse is the response for listing Product Grades.
+message ListProductGradesResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Product Grade records.
+  repeated ProductGrade data = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ExportProductGradesRequest is the request for exporting Product Grades to Excel.
+message ExportProductGradesRequest {
+  // Filter by active status.
+  ActiveFilter active_filter = 1;
+}
+
+// ExportProductGradesResponse is the response for exporting Product Grades.
+message ExportProductGradesResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Excel file content.
+  bytes file_content = 2;
+  // Excel file name.
+  string file_name = 3;
+}
+
+// ImportProductGradesRequest is the request for importing Product Grades from Excel.
+message ImportProductGradesRequest {
+  // Excel file content (max 10 MB).
+  bytes file_content = 1 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 10485760
+  }];
+  // Excel file name.
+  string file_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 255
+  }];
+  // How to handle duplicate codes.
+  string duplicate_action = 3 [(buf.validate.field).string = {
+    in: [
+      "skip",
+      "update",
+      "error"
+    ]
+  }];
+}
+
+// ImportProductGradesResponse is the response for importing Product Grades.
+message ImportProductGradesResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Number of successfully created records.
+  int32 success_count = 2;
+  // Number of skipped records.
+  int32 skipped_count = 3;
+  // Number of failed records.
+  int32 failed_count = 4;
+  // Per-row import errors.
+  repeated ImportError errors = 5;
+}
+
+// DownloadProductGradeTemplateRequest is the request for downloading the import template.
+message DownloadProductGradeTemplateRequest {}
+
+// DownloadProductGradeTemplateResponse is the response for downloading the import template.
+message DownloadProductGradeTemplateResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Excel template file content.
+  bytes file_content = 2;
+  // Excel file name.
+  string file_name = 3;
+}
+
+// =============================================================================
+// MESSAGES — MB Head
+// =============================================================================
+
+// MBHead represents a Melange Batch head master record (MEL yarn type only).
+message MBHead {
+  // UUID primary key.
+  string mbh_id = 1;
+  // Oracle PK for import reconciliation (optional).
+  string mbh_oracle_sys_id = 2;
+  // Batch cost code / identifier. Unique.
+  string mbh_mb_costing = 3;
+  // Management display name.
+  string mbh_mgt_name = 4;
+  // Yarn denier (dtex). Optional.
+  optional double mbh_denier = 5;
+  // Number of filaments. Optional.
+  optional int32 mbh_filament = 6;
+  // Dozing percentage. Optional.
+  optional double mbh_dozing = 7;
+  // Whether the record is active.
+  bool mbh_is_active = 8;
+  // Audit metadata.
+  common.v1.AuditInfo audit = 16;
+}
+
+// CreateMBHeadRequest is the request for creating an MB Head record.
+message CreateMBHeadRequest {
+  // Batch cost code (max 100 chars).
+  string mbh_mb_costing = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Optional Oracle sys ID (max 30 chars).
+  optional string mbh_oracle_sys_id = 2 [(buf.validate.field).string.max_len = 30];
+  // Management display name (max 100 chars).
+  optional string mbh_mgt_name = 3 [(buf.validate.field).string.max_len = 100];
+  // Optional yarn denier.
+  optional double mbh_denier = 4;
+  // Optional number of filaments.
+  optional int32 mbh_filament = 5;
+  // Optional dozing percentage.
+  optional double mbh_dozing = 6;
+}
+
+// CreateMBHeadResponse is the response for creating an MB Head record.
+message CreateMBHeadResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Created MB Head data.
+  MBHead data = 2;
+}
+
+// GetMBHeadRequest is the request for retrieving an MB Head record by ID.
+message GetMBHeadRequest {
+  // MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetMBHeadResponse is the response for retrieving an MB Head record.
+message GetMBHeadResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // MB Head data.
+  MBHead data = 2;
+}
+
+// UpdateMBHeadRequest is the request for updating an MB Head record.
+message UpdateMBHeadRequest {
+  // MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+  // Updated batch cost code (max 100 chars).
+  optional string mbh_mb_costing = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Updated management display name (max 100 chars).
+  optional string mbh_mgt_name = 3 [(buf.validate.field).string.max_len = 100];
+  // Updated yarn denier.
+  optional double mbh_denier = 4;
+  // Updated number of filaments.
+  optional int32 mbh_filament = 5;
+  // Updated dozing percentage.
+  optional double mbh_dozing = 6;
+  // Updated active status.
+  optional bool mbh_is_active = 7;
+}
+
+// UpdateMBHeadResponse is the response for updating an MB Head record.
+message UpdateMBHeadResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated MB Head data.
+  MBHead data = 2;
+}
+
+// DeleteMBHeadRequest is the request for soft-deleting an MB Head record.
+message DeleteMBHeadRequest {
+  // MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteMBHeadResponse is the response for soft-deleting an MB Head record.
+message DeleteMBHeadResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+}
+
+// ListMBHeadsRequest is the request for listing MB Head records.
+message ListMBHeadsRequest {
+  // Page number (≥ 1).
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  // Page size (1-100).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Full-text search across mb_costing and mgt_name.
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  // Filter by active status.
+  ActiveFilter active_filter = 4;
+  // Sort field.
+  string sort_by = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "mbh_mb_costing",
+      "mbh_mgt_name",
+      "mbh_denier",
+      "created_at"
+    ]
+  }];
+  // Sort direction.
+  string sort_order = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+// ListMBHeadsResponse is the response for listing MB Head records.
+message ListMBHeadsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // MB Head records.
+  repeated MBHead data = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ExportMBHeadsRequest is the request for exporting MB Head records to Excel.
+message ExportMBHeadsRequest {
+  // Filter by active status.
+  ActiveFilter active_filter = 1;
+}
+
+// ExportMBHeadsResponse is the response for exporting MB Head records.
+message ExportMBHeadsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Excel file content.
+  bytes file_content = 2;
+  // Excel file name.
+  string file_name = 3;
+}
+
+// ImportMBHeadsRequest is the request for importing MB Head records from Excel.
+message ImportMBHeadsRequest {
+  // Excel file content (max 10 MB).
+  bytes file_content = 1 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 10485760
+  }];
+  // Excel file name.
+  string file_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 255
+  }];
+  // How to handle duplicate mb_costing values.
+  string duplicate_action = 3 [(buf.validate.field).string = {
+    in: [
+      "skip",
+      "update",
+      "error"
+    ]
+  }];
+}
+
+// ImportMBHeadsResponse is the response for importing MB Head records.
+message ImportMBHeadsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Number of successfully created records.
+  int32 success_count = 2;
+  // Number of skipped records.
+  int32 skipped_count = 3;
+  // Number of failed records.
+  int32 failed_count = 4;
+  // Per-row import errors.
+  repeated ImportError errors = 5;
+}
+
+// DownloadMBHeadTemplateRequest is the request for downloading the import template.
+message DownloadMBHeadTemplateRequest {}
+
+// DownloadMBHeadTemplateResponse is the response for downloading the import template.
+message DownloadMBHeadTemplateResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Excel template file content.
+  bytes file_content = 2;
+  // Excel file name.
+  string file_name = 3;
+}
+
+// =============================================================================
+// MESSAGES — MB Spin
+// =============================================================================
+
+// MBSpin represents a Melange Batch spin detail record (child of MBHead).
+message MBSpin {
+  // UUID primary key.
+  string mbs_id = 1;
+  // Oracle PK for import reconciliation (optional).
+  string mbs_oracle_sys_id = 2;
+  // Parent MB Head UUID.
+  string mbs_mbh_id = 3;
+  // Management display name.
+  string mbs_mgt_name = 4;
+  // Spin denier (dtex). Optional.
+  optional double mbs_denier = 5;
+  // Number of filaments. Optional.
+  optional int32 mbs_filament = 6;
+  // Spin dozing percentage. Optional.
+  optional double mbs_dozing = 7;
+  // Spin cost code / identifier. Optional.
+  string mbs_mb_costing = 8;
+  // Whether the record is active.
+  bool mbs_is_active = 9;
+  // Audit metadata.
+  common.v1.AuditInfo audit = 16;
+}
+
+// CreateMBSpinRequest is the request for creating an MB Spin record.
+message CreateMBSpinRequest {
+  // Parent MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+  // Management display name (max 100 chars).
+  string mbs_mgt_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Optional Oracle sys ID (max 30 chars).
+  optional string mbs_oracle_sys_id = 3 [(buf.validate.field).string.max_len = 30];
+  // Optional spin denier.
+  optional double mbs_denier = 4;
+  // Optional number of filaments.
+  optional int32 mbs_filament = 5;
+  // Optional spin dozing percentage.
+  optional double mbs_dozing = 6;
+  // Optional spin cost code (max 100 chars).
+  optional string mbs_mb_costing = 7 [(buf.validate.field).string.max_len = 100];
+}
+
+// CreateMBSpinResponse is the response for creating an MB Spin record.
+message CreateMBSpinResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Created MB Spin data.
+  MBSpin data = 2;
+}
+
+// GetMBSpinRequest is the request for retrieving an MB Spin record by ID.
+message GetMBSpinRequest {
+  // Parent MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+  // MB Spin UUID.
+  string mbs_id = 2 [(buf.validate.field).string.uuid = true];
+}
+
+// GetMBSpinResponse is the response for retrieving an MB Spin record.
+message GetMBSpinResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // MB Spin data.
+  MBSpin data = 2;
+}
+
+// UpdateMBSpinRequest is the request for updating an MB Spin record.
+message UpdateMBSpinRequest {
+  // Parent MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+  // MB Spin UUID.
+  string mbs_id = 2 [(buf.validate.field).string.uuid = true];
+  // Updated management display name (max 100 chars).
+  optional string mbs_mgt_name = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Updated spin denier.
+  optional double mbs_denier = 4;
+  // Updated number of filaments.
+  optional int32 mbs_filament = 5;
+  // Updated spin dozing percentage.
+  optional double mbs_dozing = 6;
+  // Updated spin cost code (max 100 chars).
+  optional string mbs_mb_costing = 7 [(buf.validate.field).string.max_len = 100];
+  // Updated active status.
+  optional bool mbs_is_active = 8;
+}
+
+// UpdateMBSpinResponse is the response for updating an MB Spin record.
+message UpdateMBSpinResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated MB Spin data.
+  MBSpin data = 2;
+}
+
+// DeleteMBSpinRequest is the request for soft-deleting an MB Spin record.
+message DeleteMBSpinRequest {
+  // Parent MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+  // MB Spin UUID.
+  string mbs_id = 2 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteMBSpinResponse is the response for soft-deleting an MB Spin record.
+message DeleteMBSpinResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+}
+
+// ListMBSpinsRequest is the request for listing MB Spin records under a head.
+message ListMBSpinsRequest {
+  // Parent MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+  // Page number (≥ 1).
+  int32 page = 2 [(buf.validate.field).int32.gte = 1];
+  // Page size (1-100).
+  int32 page_size = 3 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Full-text search across mgt_name and mb_costing.
+  string search = 4 [(buf.validate.field).string.max_len = 100];
+  // Filter by active status.
+  ActiveFilter active_filter = 5;
+  // Sort field.
+  string sort_by = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "mbs_mgt_name",
+      "mbs_denier",
+      "created_at"
+    ]
+  }];
+  // Sort direction.
+  string sort_order = 7 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+// ListMBSpinsResponse is the response for listing MB Spin records.
+message ListMBSpinsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // MB Spin records.
+  repeated MBSpin data = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ExportMBSpinsRequest is the request for exporting MB Spin records to Excel.
+message ExportMBSpinsRequest {
+  // Parent MB Head UUID filter.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// ExportMBSpinsResponse is the response for exporting MB Spin records.
+message ExportMBSpinsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Excel file content.
+  bytes file_content = 2;
+  // Excel file name.
+  string file_name = 3;
+}
+
+// ImportMBSpinsRequest is the request for importing MB Spin records from Excel.
+message ImportMBSpinsRequest {
+  // Parent MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+  // Excel file content (max 10 MB).
+  bytes file_content = 2 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 10485760
+  }];
+  // Excel file name.
+  string file_name = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 255
+  }];
+  // How to handle duplicates.
+  string duplicate_action = 4 [(buf.validate.field).string = {
+    in: [
+      "skip",
+      "update",
+      "error"
+    ]
+  }];
+}
+
+// ImportMBSpinsResponse is the response for importing MB Spin records.
+message ImportMBSpinsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Number of successfully created records.
+  int32 success_count = 2;
+  // Number of skipped records.
+  int32 skipped_count = 3;
+  // Number of failed records.
+  int32 failed_count = 4;
+  // Per-row import errors.
+  repeated ImportError errors = 5;
+}
+
+// DownloadMBSpinTemplateRequest is the request for downloading the import template.
+message DownloadMBSpinTemplateRequest {
+  // Parent MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DownloadMBSpinTemplateResponse is the response for downloading the import template.
+message DownloadMBSpinTemplateResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Excel template file content.
+  bytes file_content = 2;
+  // Excel file name.
+  string file_name = 3;
+}
+
+// =============================================================================
+// SERVICES
+// =============================================================================
+
+// MachineService manages yarn machine master data.
+service MachineService {
+  // CreateMachine creates a new machine record.
+  rpc CreateMachine(CreateMachineRequest) returns (CreateMachineResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/machines"
+      body: "*"
+    };
+  }
+  // GetMachine retrieves a machine by ID.
+  rpc GetMachine(GetMachineRequest) returns (GetMachineResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/machines/{machine_id}"};
+  }
+  // ListMachines lists machine records with search, filter, and pagination.
+  rpc ListMachines(ListMachinesRequest) returns (ListMachinesResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/machines"};
+  }
+  // UpdateMachine updates an existing machine record.
+  rpc UpdateMachine(UpdateMachineRequest) returns (UpdateMachineResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/machines/{machine_id}"
+      body: "*"
+    };
+  }
+  // DeleteMachine soft-deletes a machine record.
+  rpc DeleteMachine(DeleteMachineRequest) returns (DeleteMachineResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/machines/{machine_id}"};
+  }
+  // ExportMachines exports machine records to Excel.
+  rpc ExportMachines(ExportMachinesRequest) returns (ExportMachinesResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/machines/export"};
+  }
+  // ImportMachines imports machine records from Excel.
+  rpc ImportMachines(ImportMachinesRequest) returns (ImportMachinesResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/machines/import"
+      body: "*"
+    };
+  }
+  // DownloadMachineTemplate downloads the Excel import template.
+  rpc DownloadMachineTemplate(DownloadMachineTemplateRequest) returns (DownloadMachineTemplateResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/machines/template"};
+  }
+}
+
+// BoxBobbinCostService manages packing configuration and period-specific rates.
+service BoxBobbinCostService {
+  // CreateBoxBobbinCost creates a new packing config.
+  rpc CreateBoxBobbinCost(CreateBoxBobbinCostRequest) returns (CreateBoxBobbinCostResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/box-bobbin-costs"
+      body: "*"
+    };
+  }
+  // GetBoxBobbinCost retrieves a config by ID (includes rates).
+  rpc GetBoxBobbinCost(GetBoxBobbinCostRequest) returns (GetBoxBobbinCostResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/box-bobbin-costs/{bbc_id}"};
+  }
+  // ListBoxBobbinCosts lists configs with search, filter, and pagination.
+  rpc ListBoxBobbinCosts(ListBoxBobbinCostsRequest) returns (ListBoxBobbinCostsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/box-bobbin-costs"};
+  }
+  // UpdateBoxBobbinCost updates an existing config.
+  rpc UpdateBoxBobbinCost(UpdateBoxBobbinCostRequest) returns (UpdateBoxBobbinCostResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/box-bobbin-costs/{bbc_id}"
+      body: "*"
+    };
+  }
+  // DeleteBoxBobbinCost soft-deletes a config.
+  rpc DeleteBoxBobbinCost(DeleteBoxBobbinCostRequest) returns (DeleteBoxBobbinCostResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/box-bobbin-costs/{bbc_id}"};
+  }
+  // CreateBoxBobbinCostRate adds a period rate entry to a config.
+  rpc CreateBoxBobbinCostRate(CreateBoxBobbinCostRateRequest) returns (CreateBoxBobbinCostRateResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/box-bobbin-costs/{bbc_id}/rates"
+      body: "*"
+    };
+  }
+  // DeleteBoxBobbinCostRate removes a period rate entry.
+  rpc DeleteBoxBobbinCostRate(DeleteBoxBobbinCostRateRequest) returns (DeleteBoxBobbinCostRateResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/box-bobbin-costs/{bbc_id}/rates/{bbcr_id}"};
+  }
+  // ExportBoxBobbinCosts exports configs to Excel.
+  rpc ExportBoxBobbinCosts(ExportBoxBobbinCostsRequest) returns (ExportBoxBobbinCostsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/box-bobbin-costs/export"};
+  }
+  // ImportBoxBobbinCosts imports configs from Excel.
+  rpc ImportBoxBobbinCosts(ImportBoxBobbinCostsRequest) returns (ImportBoxBobbinCostsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/box-bobbin-costs/import"
+      body: "*"
+    };
+  }
+  // DownloadBoxBobbinCostTemplate downloads the Excel import template.
+  rpc DownloadBoxBobbinCostTemplate(DownloadBoxBobbinCostTemplateRequest) returns (DownloadBoxBobbinCostTemplateResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/box-bobbin-costs/template"};
+  }
+}
+
+// InterminglingService manages intermingling cost lookup data.
+service InterminglingService {
+  // CreateIntermingling creates a new intermingling record.
+  rpc CreateIntermingling(CreateInterminglingRequest) returns (CreateInterminglingResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/interminglings"
+      body: "*"
+    };
+  }
+  // GetIntermingling retrieves an intermingling record by ID.
+  rpc GetIntermingling(GetInterminglingRequest) returns (GetInterminglingResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/interminglings/{intm_id}"};
+  }
+  // ListInterminglings lists intermingling records with search, filter, and pagination.
+  rpc ListInterminglings(ListInterminglingsRequest) returns (ListInterminglingsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/interminglings"};
+  }
+  // UpdateIntermingling updates an existing intermingling record.
+  rpc UpdateIntermingling(UpdateInterminglingRequest) returns (UpdateInterminglingResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/interminglings/{intm_id}"
+      body: "*"
+    };
+  }
+  // DeleteIntermingling soft-deletes an intermingling record.
+  rpc DeleteIntermingling(DeleteInterminglingRequest) returns (DeleteInterminglingResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/interminglings/{intm_id}"};
+  }
+  // ExportInterminglings exports records to Excel.
+  rpc ExportInterminglings(ExportInterminglingsRequest) returns (ExportInterminglingsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/interminglings/export"};
+  }
+  // ImportInterminglings imports records from Excel.
+  rpc ImportInterminglings(ImportInterminglingsRequest) returns (ImportInterminglingsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/interminglings/import"
+      body: "*"
+    };
+  }
+  // DownloadInterminglingTemplate downloads the Excel import template.
+  rpc DownloadInterminglingTemplate(DownloadInterminglingTemplateRequest) returns (DownloadInterminglingTemplateResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/interminglings/template"};
+  }
+}
+
+// ProductGradeService manages quality-loss configuration presets.
+service ProductGradeService {
+  // CreateProductGrade creates a new Product Grade.
+  rpc CreateProductGrade(CreateProductGradeRequest) returns (CreateProductGradeResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/product-grades"
+      body: "*"
+    };
+  }
+  // GetProductGrade retrieves a Product Grade by ID.
+  rpc GetProductGrade(GetProductGradeRequest) returns (GetProductGradeResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/product-grades/{pg_id}"};
+  }
+  // ListProductGrades lists Product Grades with search, filter, and pagination.
+  rpc ListProductGrades(ListProductGradesRequest) returns (ListProductGradesResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/product-grades"};
+  }
+  // UpdateProductGrade updates an existing Product Grade.
+  rpc UpdateProductGrade(UpdateProductGradeRequest) returns (UpdateProductGradeResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/product-grades/{pg_id}"
+      body: "*"
+    };
+  }
+  // DeleteProductGrade soft-deletes a Product Grade.
+  rpc DeleteProductGrade(DeleteProductGradeRequest) returns (DeleteProductGradeResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/product-grades/{pg_id}"};
+  }
+  // ExportProductGrades exports Product Grades to Excel.
+  rpc ExportProductGrades(ExportProductGradesRequest) returns (ExportProductGradesResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/product-grades/export"};
+  }
+  // ImportProductGrades imports Product Grades from Excel.
+  rpc ImportProductGrades(ImportProductGradesRequest) returns (ImportProductGradesResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/product-grades/import"
+      body: "*"
+    };
+  }
+  // DownloadProductGradeTemplate downloads the Excel import template.
+  rpc DownloadProductGradeTemplate(DownloadProductGradeTemplateRequest) returns (DownloadProductGradeTemplateResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/product-grades/template"};
+  }
+}
+
+// MBHeadService manages Melange Batch head master data (MEL yarn type only).
+service MBHeadService {
+  // CreateMBHead creates a new MB Head record.
+  rpc CreateMBHead(CreateMBHeadRequest) returns (CreateMBHeadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-heads"
+      body: "*"
+    };
+  }
+  // GetMBHead retrieves an MB Head record by ID.
+  rpc GetMBHead(GetMBHeadRequest) returns (GetMBHeadResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/mb-heads/{mbh_id}"};
+  }
+  // ListMBHeads lists MB Head records with search, filter, and pagination.
+  rpc ListMBHeads(ListMBHeadsRequest) returns (ListMBHeadsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/mb-heads"};
+  }
+  // UpdateMBHead updates an existing MB Head record.
+  rpc UpdateMBHead(UpdateMBHeadRequest) returns (UpdateMBHeadResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/mb-heads/{mbh_id}"
+      body: "*"
+    };
+  }
+  // DeleteMBHead soft-deletes an MB Head record.
+  rpc DeleteMBHead(DeleteMBHeadRequest) returns (DeleteMBHeadResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/mb-heads/{mbh_id}"};
+  }
+  // ExportMBHeads exports MB Head records to Excel.
+  rpc ExportMBHeads(ExportMBHeadsRequest) returns (ExportMBHeadsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/mb-heads/export"};
+  }
+  // ImportMBHeads imports MB Head records from Excel.
+  rpc ImportMBHeads(ImportMBHeadsRequest) returns (ImportMBHeadsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-heads/import"
+      body: "*"
+    };
+  }
+  // DownloadMBHeadTemplate downloads the Excel import template.
+  rpc DownloadMBHeadTemplate(DownloadMBHeadTemplateRequest) returns (DownloadMBHeadTemplateResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/mb-heads/template"};
+  }
+}
+
+// MBSpinService manages Melange Batch spin detail data (child of MBHead).
+service MBSpinService {
+  // CreateMBSpin creates a new MB Spin record under a head.
+  rpc CreateMBSpin(CreateMBSpinRequest) returns (CreateMBSpinResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-heads/{mbh_id}/spins"
+      body: "*"
+    };
+  }
+  // GetMBSpin retrieves an MB Spin record by ID.
+  rpc GetMBSpin(GetMBSpinRequest) returns (GetMBSpinResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/mb-heads/{mbh_id}/spins/{mbs_id}"};
+  }
+  // ListMBSpins lists MB Spin records under a head.
+  rpc ListMBSpins(ListMBSpinsRequest) returns (ListMBSpinsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/mb-heads/{mbh_id}/spins"};
+  }
+  // UpdateMBSpin updates an existing MB Spin record.
+  rpc UpdateMBSpin(UpdateMBSpinRequest) returns (UpdateMBSpinResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/mb-heads/{mbh_id}/spins/{mbs_id}"
+      body: "*"
+    };
+  }
+  // DeleteMBSpin soft-deletes an MB Spin record.
+  rpc DeleteMBSpin(DeleteMBSpinRequest) returns (DeleteMBSpinResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/mb-heads/{mbh_id}/spins/{mbs_id}"};
+  }
+  // ExportMBSpins exports MB Spin records to Excel.
+  rpc ExportMBSpins(ExportMBSpinsRequest) returns (ExportMBSpinsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/mb-heads/{mbh_id}/spins/export"};
+  }
+  // ImportMBSpins imports MB Spin records from Excel.
+  rpc ImportMBSpins(ImportMBSpinsRequest) returns (ImportMBSpinsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-heads/{mbh_id}/spins/import"
+      body: "*"
+    };
+  }
+  // DownloadMBSpinTemplate downloads the Excel import template.
+  rpc DownloadMBSpinTemplate(DownloadMBSpinTemplateRequest) returns (DownloadMBSpinTemplateResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/mb-heads/{mbh_id}/spins/template"};
+  }
+}
