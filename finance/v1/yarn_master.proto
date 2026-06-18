@@ -1461,6 +1461,33 @@ message DownloadMBSpinTemplateResponse {
 }
 
 // =============================================================================
+// MESSAGES — Yarn Lookup Fill (auto-populate CAPP from master selection)
+// =============================================================================
+
+// GetLookupFillValuesRequest requests auto-fill values from a master lookup selection.
+message GetLookupFillValuesRequest {
+  // lookup_master_code from mst_parameter.lookup_master_code.
+  // Valid values: "MACHINE" | "INTERMINGLING" | "PRODUCT_GRADE" | "MB_HEAD" | "BOX_BOBBIN_COST"
+  string lookup_master_code = 1 [(buf.validate.field).string.min_len = 1];
+  // Key of the selected master record (e.g., mc_code, intm_code, pg_code, mbh_mb_costing, bbc_code).
+  string selected_key = 2 [(buf.validate.field).string.min_len = 1];
+  // Source param code that triggered the lookup — used to resolve CAP vs DEL variant for BOX_BOBBIN_COST.
+  // Optional; required only for BOX_BOBBIN_COST.
+  string source_param_code = 3;
+}
+
+// GetLookupFillValuesResponse returns numeric and text fills to auto-populate CAPP params.
+message GetLookupFillValuesResponse {
+  common.v1.BaseResponse base = 1;
+  // param_code → numeric value to fill (e.g., {"MC_SPEED": 800.0, "MC_EFFICIENCY": 92.0}).
+  map<string, double> numeric_fills = 2;
+  // param_code → text value to fill (e.g., {"MB_DYE_NAME": "CIBA RED"}).
+  map<string, string> text_fills = 3;
+  // Human-readable label for UI toast (e.g., "Barmag DTY Line D — 504 pos, 800 m/min").
+  string display_label = 4;
+}
+
+// =============================================================================
 // SERVICES
 // =============================================================================
 
@@ -1742,5 +1769,19 @@ service MBSpinService {
   // DownloadMBSpinTemplate downloads the Excel import template.
   rpc DownloadMBSpinTemplate(DownloadMBSpinTemplateRequest) returns (DownloadMBSpinTemplateResponse) {
     option (google.api.http) = {get: "/api/v1/finance/mb-heads/{mbh_id}/spins/template"};
+  }
+}
+
+// =============================================================================
+// SERVICE — YarnLookupFill
+// =============================================================================
+
+// YarnLookupFillService provides a unified "fill from master" API used by the CAPP form.
+// Called when the user selects a lookup param value (e.g., a machine code).
+// Returns numeric and text fills to auto-populate related CAPP params.
+service YarnLookupFillService {
+  // GetLookupFillValues returns numeric and text fills to auto-populate CAPP params.
+  rpc GetLookupFillValues(GetLookupFillValuesRequest) returns (GetLookupFillValuesResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/lookup-fill-values"};
   }
 }
