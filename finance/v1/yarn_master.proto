@@ -1345,8 +1345,11 @@ message DeleteMBSpinResponse {
 
 // ListMBSpinsRequest is the request for listing MB Spin records under a head.
 message ListMBSpinsRequest {
-  // Parent MB Head UUID.
-  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+  // Parent MB Head UUID. Optional — omit or send empty to list all spins.
+  string mbh_id = 1 [(buf.validate.field) = {
+    ignore: IGNORE_IF_ZERO_VALUE
+    string: {uuid: true}
+  }];
   // Page number (≥ 1).
   int32 page = 2 [(buf.validate.field).int32.gte = 1];
   // Page size (1-100).
