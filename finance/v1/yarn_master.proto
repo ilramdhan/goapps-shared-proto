@@ -1773,6 +1773,67 @@ service MBSpinService {
 }
 
 // =============================================================================
+// MESSAGES — Lookup Master Registry
+// =============================================================================
+
+// LookupMaster describes a named master table available for MASTER_LOOKUP param dropdowns.
+message LookupMaster {
+  string lm_code = 1;
+  string lm_display_name = 2;
+  string lm_api_path = 3;
+  string lm_code_field = 4;
+  string lm_label_field = 5;
+  bool lm_is_active = 6;
+}
+
+// ListLookupMastersRequest is the request for listing lookup masters.
+message ListLookupMastersRequest {
+  bool active_only = 1;
+}
+
+// ListLookupMastersResponse is the response for listing lookup masters.
+message ListLookupMastersResponse {
+  common.v1.BaseResponse base = 1;
+  repeated LookupMaster data = 2;
+}
+
+// LookupMasterColumn describes one selectable column from a lookup master table.
+message LookupMasterColumn {
+  string lmc_master_code = 1;
+  string lmc_column_name = 2;
+  string lmc_display_name = 3;
+  string lmc_data_type = 4;
+  int32 lmc_sort_order = 5;
+}
+
+// ListLookupMasterColumnsRequest is the request for listing columns of a lookup master.
+message ListLookupMasterColumnsRequest {
+  string master_code = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+// ListLookupMasterColumnsResponse is the response for listing lookup master columns.
+message ListLookupMasterColumnsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated LookupMasterColumn data = 2;
+}
+
+// =============================================================================
+// SERVICE — LookupMasterService
+// =============================================================================
+
+// LookupMasterService provides lookup master registry for MASTER_LOOKUP param dropdowns.
+service LookupMasterService {
+  // ListLookupMasters returns all registered lookup masters.
+  rpc ListLookupMasters(ListLookupMastersRequest) returns (ListLookupMastersResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/lookup-masters"};
+  }
+  // ListLookupMasterColumns returns the selectable columns for one lookup master.
+  rpc ListLookupMasterColumns(ListLookupMasterColumnsRequest) returns (ListLookupMasterColumnsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/lookup-master-columns"};
+  }
+}
+
+// =============================================================================
 // SERVICE — YarnLookupFill
 // =============================================================================
 
