@@ -1784,6 +1784,8 @@ message LookupMaster {
   string lm_code_field = 4;
   string lm_label_field = 5;
   bool lm_is_active = 6;
+  // PostgreSQL table name for DB introspection (e.g., "mst_machine").
+  string lm_table_name = 7;
 }
 
 // ListLookupMastersRequest is the request for listing lookup masters.
@@ -1842,6 +1844,8 @@ message CreateLookupMasterRequest {
     min_len: 1
     max_len: 50
   }];
+  // PostgreSQL table name for DB introspection (optional, max 63 chars).
+  optional string lm_table_name = 6 [(buf.validate.field).string.max_len = 63];
 }
 
 // CreateLookupMasterResponse is the response for adding a new master.
@@ -1896,6 +1900,92 @@ message DeleteLookupMasterColumnResponse {
   common.v1.BaseResponse base = 1;
 }
 
+// UpdateLookupMasterRequest updates mutable fields of an existing lookup master.
+message UpdateLookupMasterRequest {
+  string lm_code = 1 [(buf.validate.field).string.min_len = 1];
+  optional string lm_display_name = 2 [(buf.validate.field).string.max_len = 100];
+  optional string lm_table_name = 3 [(buf.validate.field).string.max_len = 63];
+  optional bool lm_is_active = 4;
+}
+
+// UpdateLookupMasterResponse is the response for UpdateLookupMaster.
+message UpdateLookupMasterResponse {
+  common.v1.BaseResponse base = 1;
+  LookupMaster data = 2;
+}
+
+// TableColumn is one column from information_schema introspection.
+message TableColumn {
+  // PostgreSQL column name (e.g., "mc_speed").
+  string column_name = 1;
+  // Mapped type: "NUMBER" or "TEXT".
+  string data_type = 2;
+  // Original PostgreSQL type (e.g., "numeric", "character varying").
+  string raw_type = 3;
+  // Position in the table (from information_schema).
+  int32 ordinal_position = 4;
+}
+
+// ListTableColumnsRequest introspects a registered PostgreSQL table's columns.
+message ListTableColumnsRequest {
+  // Table name — must match an lm_table_name value in mst_lookup_master for safety.
+  string table_name = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+// ListTableColumnsResponse is the response for ListTableColumns.
+message ListTableColumnsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated TableColumn data = 2;
+}
+
+// MasterOption is one combobox entry (code + label) for the MasterLookupField dropdown.
+message MasterOption {
+  // The "code" field value stored as the param's text value.
+  string value = 1;
+  // The "label" field value displayed to the user.
+  string label = 2;
+}
+
+// ListMasterOptionsRequest queries the registered table to populate a combobox.
+message ListMasterOptionsRequest {
+  // lookup_master_code (e.g., "MACHINE") — used to resolve table_name + code/label fields.
+  string master_code = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+// ListMasterOptionsResponse is the response for ListMasterOptions.
+message ListMasterOptionsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated MasterOption data = 2;
+}
+
+// ExportLookupMastersRequest is the request for exporting registry to Excel.
+message ExportLookupMastersRequest {}
+
+// ExportLookupMastersResponse carries the Excel workbook bytes.
+message ExportLookupMastersResponse {
+  common.v1.BaseResponse base = 1;
+  bytes file_content = 2;
+  string file_name = 3;
+}
+
+// ImportLookupMastersRequest carries an Excel workbook to import registry entries.
+message ImportLookupMastersRequest {
+  bytes file_content = 1 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 10485760
+  }];
+  string file_name = 2;
+}
+
+// ImportLookupMastersResponse summarizes the import result.
+message ImportLookupMastersResponse {
+  common.v1.BaseResponse base = 1;
+  int32 success_count = 2;
+  int32 skipped_count = 3;
+  int32 failed_count = 4;
+  repeated string errors = 5;
+}
+
 // =============================================================================
 // SERVICE — LookupMasterService
 // =============================================================================
@@ -1931,6 +2021,32 @@ service LookupMasterService {
   // DeleteLookupMasterColumn removes a column from a master.
   rpc DeleteLookupMasterColumn(DeleteLookupMasterColumnRequest) returns (DeleteLookupMasterColumnResponse) {
     option (google.api.http) = {delete: "/api/v1/finance/lookup-master-columns/{lmc_id}"};
+  }
+  // UpdateLookupMaster updates display_name, table_name, and/or is_active of an existing master.
+  rpc UpdateLookupMaster(UpdateLookupMasterRequest) returns (UpdateLookupMasterResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/lookup-masters/{lm_code}"
+      body: "*"
+    };
+  }
+  // ListTableColumns introspects a registered PostgreSQL table's columns via information_schema.
+  rpc ListTableColumns(ListTableColumnsRequest) returns (ListTableColumnsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/lookup-master-table-columns"};
+  }
+  // ListMasterOptions returns combobox options (value+label) by querying the registered table.
+  rpc ListMasterOptions(ListMasterOptionsRequest) returns (ListMasterOptionsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/lookup-master-options"};
+  }
+  // ExportLookupMasters exports all masters and columns to an Excel workbook.
+  rpc ExportLookupMasters(ExportLookupMastersRequest) returns (ExportLookupMastersResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/lookup-masters/export"};
+  }
+  // ImportLookupMasters imports masters and columns from an Excel workbook.
+  rpc ImportLookupMasters(ImportLookupMastersRequest) returns (ImportLookupMastersResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/lookup-masters/import"
+      body: "*"
+    };
   }
 }
 
