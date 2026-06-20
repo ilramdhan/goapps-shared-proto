@@ -1832,18 +1832,12 @@ message CreateLookupMasterRequest {
     min_len: 1
     max_len: 100
   }];
-  string lm_api_path = 3 [(buf.validate.field).string = {
-    min_len: 1
-    max_len: 200
-  }];
-  string lm_code_field = 4 [(buf.validate.field).string = {
-    min_len: 1
-    max_len: 50
-  }];
-  string lm_label_field = 5 [(buf.validate.field).string = {
-    min_len: 1
-    max_len: 50
-  }];
+  // Deprecated: no longer required. Send empty string or omit.
+  string lm_api_path = 3 [(buf.validate.field).string.max_len = 200];
+  // Deprecated: no longer required. Send empty string or omit.
+  string lm_code_field = 4 [(buf.validate.field).string.max_len = 50];
+  // Deprecated: no longer required. Send empty string or omit.
+  string lm_label_field = 5 [(buf.validate.field).string.max_len = 50];
   // PostgreSQL table name for DB introspection (optional, max 63 chars).
   optional string lm_table_name = 6 [(buf.validate.field).string.max_len = 63];
 }
