@@ -8,10 +8,9 @@ import "google/api/annotations.proto";
 
 // =============================================================================
 // CostErp{Item,Grade,Shade} — PRD Phase B §7.3.
-// READ-ONLY replicas of Oracle ERP master data. Sync mechanism (CDC / scheduled
-// job) is infrastructure-level and not exposed here. Only Get / List for lookup
-// pickers (ProductMaster ERP linkage, BOM Store-Rate components, Phase A shade
-// autocomplete). NO create/update/delete RPCs.
+// ERP item master data. Originally read-only Oracle replicas; items are now
+// manually managed via CRUD RPCs since no Oracle sync job is configured.
+// Grade and Shade remain read-only lookups.
 // =============================================================================
 
 message CostErpItem {
@@ -72,6 +71,50 @@ message GetCostErpItemResponse {
   CostErpItem data = 2;
 }
 
+// CreateCostErpItemRequest creates a new ERP item.
+message CreateCostErpItemRequest {
+  string item_code = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  string item_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 255
+  }];
+  string item_type = 3 [(buf.validate.field).string.max_len = 10];
+  bool is_active = 4;
+}
+
+// CreateCostErpItemResponse returns the created ERP item.
+message CreateCostErpItemResponse {
+  common.v1.BaseResponse base = 1;
+  CostErpItem data = 2;
+}
+
+// UpdateCostErpItemRequest updates an existing ERP item.
+message UpdateCostErpItemRequest {
+  int64 item_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional string item_name = 2 [(buf.validate.field).string.max_len = 255];
+  optional string item_type = 3 [(buf.validate.field).string.max_len = 10];
+  optional bool is_active = 4;
+}
+
+// UpdateCostErpItemResponse returns the updated ERP item.
+message UpdateCostErpItemResponse {
+  common.v1.BaseResponse base = 1;
+  CostErpItem data = 2;
+}
+
+// DeleteCostErpItemRequest deletes an ERP item by ID.
+message DeleteCostErpItemRequest {
+  int64 item_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+// DeleteCostErpItemResponse confirms deletion.
+message DeleteCostErpItemResponse {
+  common.v1.BaseResponse base = 1;
+}
+
 // =============================================================================
 // ERP Grade
 // =============================================================================
@@ -118,13 +161,29 @@ message ListCostErpShadesResponse {
   common.v1.PaginationResponse pagination = 3;
 }
 
-// CostErpLookupService — read-only lookup for ERP replica tables.
+// CostErpLookupService — ERP lookup tables. Items are fully managed (CRUD);
+// grades and shades remain read-only lookups.
 service CostErpLookupService {
   rpc ListCostErpItems(ListCostErpItemsRequest) returns (ListCostErpItemsResponse) {
     option (google.api.http) = {get: "/api/v1/finance/cost-erp/items"};
   }
   rpc GetCostErpItem(GetCostErpItemRequest) returns (GetCostErpItemResponse) {
     option (google.api.http) = {get: "/api/v1/finance/cost-erp/items/{item_id}"};
+  }
+  rpc CreateCostErpItem(CreateCostErpItemRequest) returns (CreateCostErpItemResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/cost-erp/items"
+      body: "*"
+    };
+  }
+  rpc UpdateCostErpItem(UpdateCostErpItemRequest) returns (UpdateCostErpItemResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/cost-erp/items/{item_id}"
+      body: "*"
+    };
+  }
+  rpc DeleteCostErpItem(DeleteCostErpItemRequest) returns (DeleteCostErpItemResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/cost-erp/items/{item_id}"};
   }
   rpc ListCostErpGrades(ListCostErpGradesRequest) returns (ListCostErpGradesResponse) {
     option (google.api.http) = {get: "/api/v1/finance/cost-erp/grades"};
