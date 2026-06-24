@@ -53,6 +53,10 @@ message CreateCostProductMasterRequest {
     max_len: 20
   }];
   string description = 5 [(buf.validate.field).string.max_len = 1000];
+  // Legacy / import identifiers — plain text, no validation constraint.
+  string flex_01 = 6 [(buf.validate.field).string.max_len = 255]; // legacy_erp_compound_key
+  string flex_02 = 7 [(buf.validate.field).string.max_len = 100]; // legacy_oracle_sys_id
+  string flex_03 = 8 [(buf.validate.field).string.max_len = 100]; // legacy_type_label
 }
 
 message CreateCostProductMasterResponse {
@@ -97,6 +101,10 @@ message UpdateCostProductMasterRequest {
     max_len: 20
   }];
   string description = 5 [(buf.validate.field).string.max_len = 1000];
+  // Legacy / import identifiers — plain text, no validation constraint.
+  string flex_01 = 6 [(buf.validate.field).string.max_len = 255]; // legacy_erp_compound_key
+  string flex_02 = 7 [(buf.validate.field).string.max_len = 100]; // legacy_oracle_sys_id
+  string flex_03 = 8 [(buf.validate.field).string.max_len = 100]; // legacy_type_label
 }
 
 message UpdateCostProductMasterResponse {
