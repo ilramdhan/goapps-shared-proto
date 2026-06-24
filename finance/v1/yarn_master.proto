@@ -56,8 +56,26 @@ message Machine {
   bool is_active = 12;
   // Optional notes.
   string notes = 13;
+  // Optional manpower cost per day in USD.
+  optional double mp_per_day = 14;
+  // Optional overhead per head per day in USD.
+  optional double ohs_per_day = 15;
   // Audit metadata.
   common.v1.AuditInfo audit = 16;
+  // Optional spares cost per day in USD.
+  optional double spares_per_day = 17;
+  // Optional change-over quality loss in kgs.
+  optional double kgs_lost_change = 18;
+  // Optional volume bucket 1 quantity threshold.
+  optional double vb1_qty = 19;
+  // Optional volume bucket 2 quantity threshold.
+  optional double vb2_qty = 20;
+  // Optional volume bucket 3 quantity threshold.
+  optional double vb3_qty = 21;
+  // Optional volume bucket 4 quantity threshold.
+  optional double vb4_qty = 22;
+  // Optional volume bucket 5 quantity threshold.
+  optional double vb5_qty = 23;
 }
 
 // CreateMachineRequest is the request for creating a machine.
@@ -93,6 +111,24 @@ message CreateMachineRequest {
   optional double power_per_day = 10;
   // Optional notes (max 1000 chars).
   string notes = 11 [(buf.validate.field).string.max_len = 1000];
+  // Optional manpower cost per day in USD.
+  optional double mp_per_day = 12;
+  // Optional overhead per head per day in USD.
+  optional double ohs_per_day = 13;
+  // Optional spares cost per day in USD.
+  optional double spares_per_day = 14;
+  // Optional change-over quality loss in kgs.
+  optional double kgs_lost_change = 15;
+  // Optional volume bucket 1 quantity threshold.
+  optional double vb1_qty = 16;
+  // Optional volume bucket 2 quantity threshold.
+  optional double vb2_qty = 17;
+  // Optional volume bucket 3 quantity threshold.
+  optional double vb3_qty = 18;
+  // Optional volume bucket 4 quantity threshold.
+  optional double vb4_qty = 19;
+  // Optional volume bucket 5 quantity threshold.
+  optional double vb5_qty = 20;
 }
 
 // CreateMachineResponse is the response for creating a machine.
@@ -149,6 +185,24 @@ message UpdateMachineRequest {
   optional string notes = 11 [(buf.validate.field).string.max_len = 1000];
   // Updated active status.
   optional bool is_active = 12;
+  // Optional manpower cost per day in USD.
+  optional double mp_per_day = 13;
+  // Optional overhead per head per day in USD.
+  optional double ohs_per_day = 14;
+  // Optional spares cost per day in USD.
+  optional double spares_per_day = 15;
+  // Optional change-over quality loss in kgs.
+  optional double kgs_lost_change = 16;
+  // Optional volume bucket 1 quantity threshold.
+  optional double vb1_qty = 17;
+  // Optional volume bucket 2 quantity threshold.
+  optional double vb2_qty = 18;
+  // Optional volume bucket 3 quantity threshold.
+  optional double vb3_qty = 19;
+  // Optional volume bucket 4 quantity threshold.
+  optional double vb4_qty = 20;
+  // Optional volume bucket 5 quantity threshold.
+  optional double vb5_qty = 21;
 }
 
 // UpdateMachineResponse is the response for updating a machine.
@@ -790,6 +844,14 @@ message ProductGrade {
   bool is_active = 8;
   // Optional notes.
   string notes = 9;
+  // Pattern match key (e.g., "DBR <=600D").
+  string pg_detail_product = 10;
+  // Grade label for STD_VALUE_LOSS.
+  string pg_grade_label = 11;
+  // BC_SPECIAL_PROD rate.
+  double std_selling_price = 12;
+  // VALUE_LOSS rate.
+  double sp_value = 13;
   // Audit metadata.
   common.v1.AuditInfo audit = 16;
 }
@@ -825,6 +887,14 @@ message CreateProductGradeRequest {
   }];
   // Optional notes (max 1000 chars).
   string notes = 7 [(buf.validate.field).string.max_len = 1000];
+  // Pattern match key (max 100 chars).
+  string pg_detail_product = 8 [(buf.validate.field).string.max_len = 100];
+  // Grade label for STD_VALUE_LOSS (max 50 chars).
+  string pg_grade_label = 9 [(buf.validate.field).string.max_len = 50];
+  // BC_SPECIAL_PROD rate (≥ 0).
+  double std_selling_price = 10 [(buf.validate.field).double.gte = 0];
+  // VALUE_LOSS rate (≥ 0).
+  double sp_value = 11 [(buf.validate.field).double.gte = 0];
 }
 
 // CreateProductGradeResponse is the response for creating a Product Grade.
@@ -879,6 +949,14 @@ message UpdateProductGradeRequest {
   optional string notes = 7 [(buf.validate.field).string.max_len = 1000];
   // Updated active status.
   optional bool is_active = 8;
+  // Optional pattern match key (max 100 chars).
+  optional string pg_detail_product = 9 [(buf.validate.field).string.max_len = 100];
+  // Optional grade label for STD_VALUE_LOSS (max 50 chars).
+  optional string pg_grade_label = 10 [(buf.validate.field).string.max_len = 50];
+  // Optional BC_SPECIAL_PROD rate (≥ 0).
+  optional double std_selling_price = 11 [(buf.validate.field).double.gte = 0];
+  // Optional VALUE_LOSS rate (≥ 0).
+  optional double sp_value = 12 [(buf.validate.field).double.gte = 0];
 }
 
 // UpdateProductGradeResponse is the response for updating a Product Grade.
@@ -1249,6 +1327,10 @@ message MBSpin {
   string mbs_mb_costing = 8;
   // Whether the record is active.
   bool mbs_is_active = 9;
+  // Optional MB/SP cost code.
+  optional string mbs_cc = 10;
+  // Optional MB rate MKT in USD/kg.
+  optional double mbs_cost_rate_mkt = 11;
   // Audit metadata.
   common.v1.AuditInfo audit = 16;
 }
@@ -1272,6 +1354,10 @@ message CreateMBSpinRequest {
   optional double mbs_dozing = 6;
   // Optional spin cost code (max 100 chars).
   optional string mbs_mb_costing = 7 [(buf.validate.field).string.max_len = 100];
+  // Optional MB/SP cost code (max 100 chars).
+  optional string mbs_cc = 8 [(buf.validate.field).string.max_len = 100];
+  // Optional MB rate MKT in USD/kg.
+  optional double mbs_cost_rate_mkt = 9;
 }
 
 // CreateMBSpinResponse is the response for creating an MB Spin record.
@@ -1319,6 +1405,10 @@ message UpdateMBSpinRequest {
   optional string mbs_mb_costing = 7 [(buf.validate.field).string.max_len = 100];
   // Updated active status.
   optional bool mbs_is_active = 8;
+  // Optional MB/SP cost code (max 100 chars).
+  optional string mbs_cc = 9 [(buf.validate.field).string.max_len = 100];
+  // Optional MB rate MKT in USD/kg.
+  optional double mbs_cost_rate_mkt = 10;
 }
 
 // UpdateMBSpinResponse is the response for updating an MB Spin record.
