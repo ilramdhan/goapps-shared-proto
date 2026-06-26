@@ -76,6 +76,18 @@ message Machine {
   optional double vb4_qty = 22;
   // Optional volume bucket 5 quantity threshold.
   optional double vb5_qty = 23;
+  // Optional Oracle CMM_POY_BOBBIN_WEIGHT — kg per bobbin.
+  optional double mc_poy_bobbin_weight = 24;
+  // Optional Oracle CMM_TOT_FXD_CST — total fixed cost.
+  optional double mc_tot_fxd_cst = 25;
+  // Optional Oracle CMM_BOBBIN_PER_TROLLY — bobbins per trolley.
+  optional double mc_bobbin_per_trolly = 26;
+  // Optional Oracle CMM_BOX_COST — box cost per unit.
+  optional double mc_box_cost = 27;
+  // Optional Oracle CMM_CAPTIVE_PER_BOBBIN — captive cost per bobbin.
+  optional double mc_captive_per_bobbin = 28;
+  // Optional Oracle CMM_WEIGHTAGE — machine weightage factor.
+  optional double mc_weightage = 29;
 }
 
 // CreateMachineRequest is the request for creating a machine.
@@ -129,6 +141,18 @@ message CreateMachineRequest {
   optional double vb4_qty = 19;
   // Optional volume bucket 5 quantity threshold.
   optional double vb5_qty = 20;
+  // Optional Oracle CMM_POY_BOBBIN_WEIGHT (≥ 0).
+  optional double mc_poy_bobbin_weight = 21 [(buf.validate.field).double.gte = 0];
+  // Optional Oracle CMM_TOT_FXD_CST (≥ 0).
+  optional double mc_tot_fxd_cst = 22 [(buf.validate.field).double.gte = 0];
+  // Optional Oracle CMM_BOBBIN_PER_TROLLY (≥ 0).
+  optional double mc_bobbin_per_trolly = 23 [(buf.validate.field).double.gte = 0];
+  // Optional Oracle CMM_BOX_COST (≥ 0).
+  optional double mc_box_cost = 24 [(buf.validate.field).double.gte = 0];
+  // Optional Oracle CMM_CAPTIVE_PER_BOBBIN (≥ 0).
+  optional double mc_captive_per_bobbin = 25 [(buf.validate.field).double.gte = 0];
+  // Optional Oracle CMM_WEIGHTAGE (≥ 0).
+  optional double mc_weightage = 26 [(buf.validate.field).double.gte = 0];
 }
 
 // CreateMachineResponse is the response for creating a machine.
@@ -203,6 +227,18 @@ message UpdateMachineRequest {
   optional double vb4_qty = 20;
   // Optional volume bucket 5 quantity threshold.
   optional double vb5_qty = 21;
+  // Optional updated Oracle CMM_POY_BOBBIN_WEIGHT (≥ 0).
+  optional double mc_poy_bobbin_weight = 22 [(buf.validate.field).double.gte = 0];
+  // Optional updated Oracle CMM_TOT_FXD_CST (≥ 0).
+  optional double mc_tot_fxd_cst = 23 [(buf.validate.field).double.gte = 0];
+  // Optional updated Oracle CMM_BOBBIN_PER_TROLLY (≥ 0).
+  optional double mc_bobbin_per_trolly = 24 [(buf.validate.field).double.gte = 0];
+  // Optional updated Oracle CMM_BOX_COST (≥ 0).
+  optional double mc_box_cost = 25 [(buf.validate.field).double.gte = 0];
+  // Optional updated Oracle CMM_CAPTIVE_PER_BOBBIN (≥ 0).
+  optional double mc_captive_per_bobbin = 26 [(buf.validate.field).double.gte = 0];
+  // Optional updated Oracle CMM_WEIGHTAGE (≥ 0).
+  optional double mc_weightage = 27 [(buf.validate.field).double.gte = 0];
 }
 
 // UpdateMachineResponse is the response for updating a machine.
@@ -389,8 +425,12 @@ message BoxBobbinCost {
   optional double box_cost_val = 13;
   // Optional VAL bobbin rate in USD/bobbin (param CAPTIVE/DELIVERY_BOB_RATE VAL).
   optional double bobin_cost_val = 14;
+  // Optional Oracle CMBBC_BBN_REUSE_VAL — bobbin reuse count for VAL session.
+  optional double bbn_reuse_val = 15;
   // Audit metadata.
   common.v1.AuditInfo audit = 16;
+  // Optional Oracle CMBBC_BOX_REUSE_VAL — box reuse count for VAL session.
+  optional double box_reuse_val = 17;
 }
 
 // CreateBoxBobbinCostRequest is the request for creating a Box Bobbin Cost config.
@@ -423,6 +463,10 @@ message CreateBoxBobbinCostRequest {
   optional double box_cost_val = 10 [(buf.validate.field).double.gte = 0];
   // Optional VAL bobbin rate in USD/bobbin (≥ 0).
   optional double bobin_cost_val = 11 [(buf.validate.field).double.gte = 0];
+  // Optional Oracle CMBBC_BBN_REUSE_VAL (≥ 0).
+  optional double bbn_reuse_val = 12 [(buf.validate.field).double.gte = 0];
+  // Optional Oracle CMBBC_BOX_REUSE_VAL (≥ 0).
+  optional double box_reuse_val = 13 [(buf.validate.field).double.gte = 0];
 }
 
 // CreateBoxBobbinCostResponse is the response for creating a Box Bobbin Cost config.
@@ -476,6 +520,10 @@ message UpdateBoxBobbinCostRequest {
   optional double box_cost_val = 11 [(buf.validate.field).double.gte = 0];
   // Optional updated VAL bobbin rate in USD/bobbin (≥ 0).
   optional double bobin_cost_val = 12 [(buf.validate.field).double.gte = 0];
+  // Optional Oracle CMBBC_BBN_REUSE_VAL (≥ 0).
+  optional double bbn_reuse_val = 13 [(buf.validate.field).double.gte = 0];
+  // Optional Oracle CMBBC_BOX_REUSE_VAL (≥ 0).
+  optional double box_reuse_val = 14 [(buf.validate.field).double.gte = 0];
 }
 
 // UpdateBoxBobbinCostResponse is the response for updating a Box Bobbin Cost config.
@@ -1157,6 +1205,16 @@ message MBHead {
   optional double mbh_dozing = 7;
   // Whether the record is active.
   bool mbh_is_active = 8;
+  // Optional Oracle CMBH_CHECK_STATUS — check status (Waiting/Current/Approved).
+  optional string mbh_check_status = 9;
+  // Optional Oracle CMBH_STATUS — head status (R and D/Spinning/Boughtout).
+  optional string mbh_status = 10;
+  // Optional Oracle CMBH_LDR_PRSN — LDR person value.
+  optional double mbh_ldr_prsn = 11;
+  // Optional Oracle CMBH_FINAL_PRODUCT — final product description.
+  optional string mbh_final_product = 12;
+  // Optional Oracle CMBH_CODE — product code.
+  optional string mbh_code = 13;
   // Audit metadata.
   common.v1.AuditInfo audit = 16;
 }
@@ -1178,6 +1236,16 @@ message CreateMBHeadRequest {
   optional int32 mbh_filament = 5;
   // Optional dozing percentage.
   optional double mbh_dozing = 6;
+  // Optional Oracle CMBH_CHECK_STATUS (max 50 chars).
+  optional string mbh_check_status = 7 [(buf.validate.field).string.max_len = 50];
+  // Optional Oracle CMBH_STATUS (max 100 chars).
+  optional string mbh_status = 8 [(buf.validate.field).string.max_len = 100];
+  // Optional Oracle CMBH_LDR_PRSN (≥ 0).
+  optional double mbh_ldr_prsn = 9 [(buf.validate.field).double.gte = 0];
+  // Optional Oracle CMBH_FINAL_PRODUCT (max 200 chars).
+  optional string mbh_final_product = 10 [(buf.validate.field).string.max_len = 200];
+  // Optional Oracle CMBH_CODE (max 100 chars).
+  optional string mbh_code = 11 [(buf.validate.field).string.max_len = 100];
 }
 
 // CreateMBHeadResponse is the response for creating an MB Head record.
@@ -1221,6 +1289,16 @@ message UpdateMBHeadRequest {
   optional double mbh_dozing = 6;
   // Updated active status.
   optional bool mbh_is_active = 7;
+  // Optional Oracle CMBH_CHECK_STATUS (max 50 chars).
+  optional string mbh_check_status = 8 [(buf.validate.field).string.max_len = 50];
+  // Optional Oracle CMBH_STATUS (max 100 chars).
+  optional string mbh_status = 9 [(buf.validate.field).string.max_len = 100];
+  // Optional Oracle CMBH_LDR_PRSN (≥ 0).
+  optional double mbh_ldr_prsn = 10 [(buf.validate.field).double.gte = 0];
+  // Optional Oracle CMBH_FINAL_PRODUCT (max 200 chars).
+  optional string mbh_final_product = 11 [(buf.validate.field).string.max_len = 200];
+  // Optional Oracle CMBH_CODE (max 100 chars).
+  optional string mbh_code = 12 [(buf.validate.field).string.max_len = 100];
 }
 
 // UpdateMBHeadResponse is the response for updating an MB Head record.
@@ -1379,6 +1457,12 @@ message MBSpin {
   optional string mbs_cc = 10;
   // Optional MB rate MKT in USD/kg.
   optional double mbs_cost_rate_mkt = 11;
+  // Optional Oracle CMBS_STATUS — spinning status (Spinning/R and D/Boughtout).
+  optional string mbs_status = 12;
+  // Optional Oracle CMBS_LDR_PRSN — LDR person value.
+  optional double mbs_ldr_prsn = 13;
+  // Optional Oracle CMBS_FINAL_PRODUCT — final product description.
+  optional string mbs_final_product = 14;
   // Audit metadata.
   common.v1.AuditInfo audit = 16;
 }
@@ -1406,6 +1490,12 @@ message CreateMBSpinRequest {
   optional string mbs_cc = 8 [(buf.validate.field).string.max_len = 100];
   // Optional MB rate MKT in USD/kg.
   optional double mbs_cost_rate_mkt = 9;
+  // Optional Oracle CMBS_STATUS (max 100 chars).
+  optional string mbs_status = 10 [(buf.validate.field).string.max_len = 100];
+  // Optional Oracle CMBS_LDR_PRSN (≥ 0).
+  optional double mbs_ldr_prsn = 11 [(buf.validate.field).double.gte = 0];
+  // Optional Oracle CMBS_FINAL_PRODUCT (max 200 chars).
+  optional string mbs_final_product = 12 [(buf.validate.field).string.max_len = 200];
 }
 
 // CreateMBSpinResponse is the response for creating an MB Spin record.
@@ -1457,6 +1547,12 @@ message UpdateMBSpinRequest {
   optional string mbs_cc = 9 [(buf.validate.field).string.max_len = 100];
   // Optional MB rate MKT in USD/kg.
   optional double mbs_cost_rate_mkt = 10;
+  // Optional Oracle CMBS_STATUS (max 100 chars).
+  optional string mbs_status = 11 [(buf.validate.field).string.max_len = 100];
+  // Optional Oracle CMBS_LDR_PRSN (≥ 0).
+  optional double mbs_ldr_prsn = 12 [(buf.validate.field).double.gte = 0];
+  // Optional Oracle CMBS_FINAL_PRODUCT (max 200 chars).
+  optional string mbs_final_product = 13 [(buf.validate.field).string.max_len = 200];
 }
 
 // UpdateMBSpinResponse is the response for updating an MB Spin record.
