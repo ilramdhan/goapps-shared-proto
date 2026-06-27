@@ -178,6 +178,25 @@ message ImportBulkProductRoutingResponse {
   string status = 3;
 }
 
+// ImportBulkParamsOnlyRequest imports product_parameters + product_applicable_params
+// from a file that does NOT contain a product_master sheet. Products must already
+// exist in the database from a prior bulk import. Supports split part-sheets
+// (e.g. "product_parameters_p1" + "_p2"). Max 50 MB.
+message ImportBulkParamsOnlyRequest {
+  bytes file_content = 1 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 52428800
+  }];
+  string file_name = 2;
+}
+
+// ImportBulkParamsOnlyResponse returns the created async job ID.
+message ImportBulkParamsOnlyResponse {
+  common.v1.BaseResponse base = 1;
+  int64 job_id = 2;
+  string status = 3;
+}
+
 message ValidateBulkProductRoutingFileRequest {
   bytes file_content = 1 [(buf.validate.field).bytes = {
     min_len: 1
@@ -251,6 +270,15 @@ service CostDataImportService {
   rpc ImportBulkProductRouting(ImportBulkProductRoutingRequest) returns (ImportBulkProductRoutingResponse) {
     option (google.api.http) = {
       post: "/api/v1/finance/costing/import/bulk_product_routing"
+      body: "*"
+    };
+  }
+
+  // ImportBulkParamsOnly imports product parameters from a params-only file.
+  // Products must already exist in the database from a prior bulk import run.
+  rpc ImportBulkParamsOnly(ImportBulkParamsOnlyRequest) returns (ImportBulkParamsOnlyResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/costing/import/bulk_params_only"
       body: "*"
     };
   }

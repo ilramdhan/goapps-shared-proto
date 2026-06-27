@@ -118,7 +118,7 @@ message ListCostErpShadesResponse {
   common.v1.PaginationResponse pagination = 3;
 }
 
-// CostErpLookupService — read-only lookup for ERP replica tables.
+// CostErpLookupService — read-only ERP lookup tables for pickers and autocomplete.
 service CostErpLookupService {
   rpc ListCostErpItems(ListCostErpItemsRequest) returns (ListCostErpItemsResponse) {
     option (google.api.http) = {get: "/api/v1/finance/cost-erp/items"};

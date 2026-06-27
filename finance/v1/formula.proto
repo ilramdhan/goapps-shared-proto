@@ -23,6 +23,22 @@ enum FormulaType {
   FORMULA_TYPE_SQL_QUERY = 2;
   // Constant value (no calculation).
   FORMULA_TYPE_CONSTANT = 3;
+  // Conditional expression with if/else branching.
+  FORMULA_TYPE_CONDITIONAL = 4;
+  // Lookup from a master table via param code.
+  FORMULA_TYPE_LOOKUP = 5;
+  // Lookup using RM group cost rates.
+  FORMULA_TYPE_RM_LOOKUP = 6;
+  // Copy value from the SELLING (marketing) session result.
+  FORMULA_TYPE_FROM_MARKETING = 7;
+  // Intermingling cost lookup.
+  FORMULA_TYPE_INTERMINGLING = 8;
+  // Snapshot of a previously computed value.
+  FORMULA_TYPE_SNAPSHOT = 9;
+  // Placeholder — formula not yet defined.
+  FORMULA_TYPE_PENDING = 10;
+  // Seeds an initial value before the formula chain starts.
+  FORMULA_TYPE_INITIAL_VALUE = 11;
 }
 
 // =============================================================================
