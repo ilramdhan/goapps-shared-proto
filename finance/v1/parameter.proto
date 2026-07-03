@@ -91,6 +91,10 @@ message Parameter {
   string lookup_fill_group_code = 31;
   // Column name in the master entity to read value from (e.g., "mc_speed").
   string lookup_source_column = 32;
+  // Whether this parameter is shown in the approval review drawer summary.
+  bool is_approval_visible = 33;
+  // Render order within the approval review drawer summary.
+  int32 approval_display_order = 34;
 }
 
 // =============================================================================
@@ -227,6 +231,10 @@ message UpdateParameterRequest {
   optional string lookup_fill_group_code = 18 [(buf.validate.field).string.max_len = 20];
   // New source column (optional). Set to empty string to clear.
   optional string lookup_source_column = 19 [(buf.validate.field).string.max_len = 50];
+  // New is_approval_visible flag (optional).
+  optional bool is_approval_visible = 20;
+  // New approval display order (optional).
+  optional int32 approval_display_order = 21 [(buf.validate.field).int32.gte = 0];
 }
 
 // UpdateParameterResponse is the response for updating a parameter.
