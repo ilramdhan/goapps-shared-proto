@@ -625,6 +625,8 @@ message ParamValueEntry {
   bool value_flag = 8;
   string uom_code = 9;
   bool is_required = 10;
+  string display_group = 11;
+  int32 display_order = 12;
 }
 
 // FillLevelSummary groups params for one fill task level of a product.
