@@ -4,6 +4,7 @@ package finance.v1;
 
 import "buf/validate/validate.proto";
 import "common/v1/common.proto";
+import "finance/v1/uom.proto";
 import "google/api/annotations.proto";
 
 // =============================================================================
@@ -12,21 +13,45 @@ import "google/api/annotations.proto";
 // root is the request; the spec is an embedded 1:1 conditional value object.
 // =============================================================================
 
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+// TubeType represents the fixed Paper/Plastic tube classification for a
+// product spec, replacing the old master-data-backed paper_tube_type_id lookup.
+enum TubeType {
+  // Default unspecified value - used when no tube type has been selected.
+  TUBE_TYPE_UNSPECIFIED = 0;
+  // Paper tube.
+  TUBE_TYPE_PAPER = 1;
+  // Plastic tube.
+  TUBE_TYPE_PLASTIC = 2;
+}
+
 message CostProductSpec {
   int64 spec_id = 1;
   int64 request_id = 2;
   // POY_BOUGHTOUT | CHIPS_SD | CHIPS_BRT | CHIPS_RECYCLE.
+  // Deprecated for new writes: retained for historical rows, no longer populated by new writes.
   string raw_material_type = 3;
   string product_description = 4;
   int32 shade_id = 5;
-  string shade_custom_text = 6;
+  // Free-text or master shade code (e.g. NL, Z114S). Renamed from shade_custom_text — field number unchanged for wire compatibility.
+  string shade_code = 6;
+  // Deprecated: retained for historical rows, no longer populated by new writes. Use tube_type instead.
   int32 paper_tube_type_id = 7;
   string paper_tube_label = 8; // denormalized
+  // Deprecated for new writes: retained for historical rows, no longer populated by new writes.
   string weight_per_bobbin_kg = 9; // decimal stringified to preserve precision
   // JUMBO | NORMAL | PALLET.
+  // Deprecated for new writes: retained for historical rows, no longer populated by new writes.
   string box_type = 10;
   string created_at = 11;
   string created_by = 12;
+  // Human-readable shade name (e.g. Natural, Jet Black), mirrors cost_product_master's shade_name.
+  string shade_name = 13;
+  // Fixed Paper/Plastic tube classification. Replaces paper_tube_type_id for new writes.
+  TubeType tube_type = 14;
 }
 
 message CostProductRequest {
@@ -63,6 +88,9 @@ message CostProductRequest {
   int64 linked_route_head_id = 29;
   // IAM workflow instance ID linked to this request (empty if no workflow attached).
   string wfl_instance_id = 30;
+  // Optional reviewer-facing hint pointing at a similar existing product master,
+  // used to pre-fill routing resolution during review. 0 = unset.
+  int64 reference_product_sys_id = 31;
 }
 
 // =============================================================================
@@ -70,6 +98,7 @@ message CostProductRequest {
 // =============================================================================
 
 message SpecInput {
+  // Deprecated for new writes: retained for historical rows, no longer populated by new writes.
   string raw_material_type = 1 [(buf.validate.field).string = {
     in: [
       "POY_BOUGHTOUT",
@@ -83,12 +112,16 @@ message SpecInput {
     max_len: 5000
   }];
   int32 shade_id = 3;
-  string shade_custom_text = 4 [(buf.validate.field).string.max_len = 100];
+  // Free-text or master shade code (e.g. NL, Z114S). Renamed from shade_custom_text — field number unchanged for wire compatibility.
+  string shade_code = 4 [(buf.validate.field).string.max_len = 100];
+  // Deprecated: retained for historical rows, no longer populated by new writes. Use tube_type instead.
   int32 paper_tube_type_id = 5 [(buf.validate.field).int32.gte = 1];
+  // Deprecated for new writes: retained for historical rows, no longer populated by new writes.
   string weight_per_bobbin_kg = 6 [(buf.validate.field).string = {
     min_len: 1
     max_len: 20
   }];
+  // Deprecated for new writes: retained for historical rows, no longer populated by new writes.
   string box_type = 7 [(buf.validate.field).string = {
     in: [
       "JUMBO",
@@ -96,6 +129,10 @@ message SpecInput {
       "PALLET"
     ]
   }];
+  // Human-readable shade name (e.g. Natural, Jet Black), mirrors cost_product_master's shade_name.
+  string shade_name = 8 [(buf.validate.field).string.max_len = 100];
+  // Fixed Paper/Plastic tube classification. Replaces paper_tube_type_id for new writes.
+  TubeType tube_type = 9;
 }
 
 message CreateCostProductRequestRequest {
@@ -113,7 +150,8 @@ message CreateCostProductRequestRequest {
   string product_classification = 6 [(buf.validate.field).string = {
     in: [
       "existing",
-      "new"
+      "new",
+      "pending"
     ]
   }];
   string target_volume = 7 [(buf.validate.field).string.max_len = 30];
@@ -128,6 +166,9 @@ message CreateCostProductRequestRequest {
   }];
   string needed_by_date = 10 [(buf.validate.field).string.max_len = 10];
   SpecInput spec = 11;
+  // Optional reviewer-facing hint pointing at a similar existing product master.
+  // 0 = unset.
+  int64 reference_product_sys_id = 12 [(buf.validate.field).int64.gte = 0];
 }
 
 message CreateCostProductRequestResponse {
@@ -171,7 +212,8 @@ message UpdateCostProductRequestRequest {
   string product_classification = 6 [(buf.validate.field).string = {
     in: [
       "existing",
-      "new"
+      "new",
+      "pending"
     ]
   }];
   string target_volume = 7 [(buf.validate.field).string.max_len = 30];
@@ -186,6 +228,9 @@ message UpdateCostProductRequestRequest {
   }];
   string needed_by_date = 10 [(buf.validate.field).string.max_len = 10];
   SpecInput spec = 11;
+  // Optional reviewer-facing hint pointing at a similar existing product master.
+  // 0 = unset.
+  int64 reference_product_sys_id = 12 [(buf.validate.field).int64.gte = 0];
 }
 
 message UpdateCostProductRequestResponse {
@@ -206,7 +251,12 @@ message ListCostProductRequestsRequest {
       "request_no",
       "created_at",
       "updated_at",
-      "status"
+      "status",
+      "type",
+      "title",
+      "customer",
+      "class",
+      "urgency"
     ]
   }];
   string sort_order = 8 [(buf.validate.field).string = {
@@ -222,6 +272,90 @@ message ListCostProductRequestsResponse {
   common.v1.BaseResponse base = 1;
   repeated CostProductRequest data = 2;
   common.v1.PaginationResponse pagination = 3;
+}
+
+// =============================================================================
+// Excel Export/Import/Template (design.md §4 Area D6). Create-only import:
+// every row creates a new DRAFT request, no dedup/merge against existing rows.
+// =============================================================================
+
+// ExportCostProductRequestsRequest is the request for exporting cost product
+// requests to Excel. Filters mirror ListCostProductRequestsRequest's subset
+// relevant to export (no pagination/sort — export returns all matches).
+message ExportCostProductRequestsRequest {
+  string search = 1 [(buf.validate.field).string.max_len = 200];
+  string status = 2 [(buf.validate.field).string.max_len = 30];
+  int32 request_type_id = 3;
+}
+
+// ExportCostProductRequestsResponse is the response containing the Excel file.
+message ExportCostProductRequestsResponse {
+  common.v1.BaseResponse base = 1;
+  // Excel file content as bytes (.xlsx format).
+  bytes file_content = 2;
+  // Suggested filename.
+  string file_name = 3;
+}
+
+// ImportCostProductRequestsRequest is the request for importing cost product
+// requests from Excel. Create-only: every row creates a new DRAFT request
+// regardless of duplicate_action — the field is accepted for shape parity
+// with other import RPCs but has no skip/update effect in v1.
+message ImportCostProductRequestsRequest {
+  // Excel file content as bytes (.xlsx or .xls format).
+  bytes file_content = 1 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 10485760 // 10MB max
+  }];
+  // Original filename (for format detection).
+  // Must be a simple filename without path separators.
+  string file_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 255
+    pattern: "^[^/\\\\]+\\.(xlsx|xls)$"
+  }];
+  // Accepted for shape parity with other import RPCs. Create-only: only
+  // "error" semantics apply (unresolvable rows fail with a row-level
+  // ImportError); there is no update/skip behavior in v1.
+  string duplicate_action = 3 [(buf.validate.field).string = {
+    in: [
+      "skip",
+      "update",
+      "error"
+    ]
+    min_len: 1
+  }];
+}
+
+// ImportCostProductRequestsResponse is the response for importing cost
+// product requests. updated_count/skipped_count are always 0 in v1 since
+// the import is create-only (kept for shape consistency with other imports).
+message ImportCostProductRequestsResponse {
+  common.v1.BaseResponse base = 1;
+  // Number of successfully created DRAFT requests.
+  int32 success_count = 2;
+  // Always 0 in v1 (create-only import has no skip semantics).
+  int32 skipped_count = 3;
+  // Always 0 in v1 (create-only import has no update semantics).
+  int32 updated_count = 4;
+  // Number of failed rows.
+  int32 failed_count = 5;
+  // Details of failed rows.
+  repeated ImportError errors = 6;
+}
+
+// GetCostProductRequestImportTemplateRequest is the request for downloading
+// the Excel import template.
+message GetCostProductRequestImportTemplateRequest {}
+
+// GetCostProductRequestImportTemplateResponse is the response containing the
+// template file.
+message GetCostProductRequestImportTemplateResponse {
+  common.v1.BaseResponse base = 1;
+  // Excel template file content as bytes (.xlsx format).
+  bytes file_content = 2;
+  // Suggested filename.
+  string file_name = 3;
 }
 
 // =============================================================================
@@ -270,6 +404,37 @@ message DecideCostProductRequestFeasibilityRequest {
   string note = 3 [(buf.validate.field).string.max_len = 5000];
 }
 message DecideCostProductRequestFeasibilityResponse {
+  common.v1.BaseResponse base = 1;
+  CostProductRequest data = 2;
+}
+
+// SubmitAndDecideCostProductRequest merges Submit + Start-review + Verify
+// classification + Decide feasibility + (when feasible) Link route into a
+// single action (design.md §3 B3). SUBMITTED and UNDER_REVIEW remain real
+// internal states recorded in the audit trail; only one consolidated
+// notification pair is emitted regardless of the feasibility outcome.
+message SubmitAndDecideCostProductRequestRequest {
+  int64 request_id = 1 [(buf.validate.field).int64.gte = 1];
+  string verified_classification = 2 [(buf.validate.field).string = {
+    in: [
+      "existing",
+      "new"
+    ]
+  }];
+  string override_reason = 3 [(buf.validate.field).string.max_len = 2000];
+  string decision = 4 [(buf.validate.field).string = {
+    in: [
+      "FEASIBLE",
+      "NOT_FEASIBLE"
+    ]
+  }];
+  string note = 5 [(buf.validate.field).string.max_len = 5000];
+  // reference_product_head_id is the route head resolved by RoutingResolver
+  // on the client before submitting; only applied when decision is FEASIBLE.
+  // 0 means no route was resolved (e.g. decision is NOT_FEASIBLE).
+  int64 reference_product_head_id = 6 [(buf.validate.field).int64.gte = 0];
+}
+message SubmitAndDecideCostProductRequestResponse {
   common.v1.BaseResponse base = 1;
   CostProductRequest data = 2;
 }
@@ -491,6 +656,15 @@ service CostProductRequestService {
       body: "*"
     };
   }
+  // SubmitAndDecideCostProductRequest merges Submit + Start-review + Verify
+  // classification + Decide feasibility + (when feasible) Link route into a
+  // single action (design.md §3 B3).
+  rpc SubmitAndDecideCostProductRequest(SubmitAndDecideCostProductRequestRequest) returns (SubmitAndDecideCostProductRequestResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/cost-product-requests/{request_id}/submit-and-decide"
+      body: "*"
+    };
+  }
   rpc UseExistingCostingForCostProductRequest(UseExistingCostingForCostProductRequestRequest) returns (UseExistingCostingForCostProductRequestResponse) {
     option (google.api.http) = {
       post: "/api/v1/finance/cost-product-requests/{request_id}/use-existing-costing"
@@ -594,6 +768,22 @@ service CostProductRequestService {
   // and fill level. Used by ParamSummaryPanel and ConfirmActionDialog.
   rpc GetParamSummary(GetParamSummaryRequest) returns (GetParamSummaryResponse) {
     option (google.api.http) = {get: "/api/v1/finance/cost-product-requests/{request_id}/param-summary"};
+  }
+  // ExportCostProductRequests exports cost product requests to Excel file.
+  rpc ExportCostProductRequests(ExportCostProductRequestsRequest) returns (ExportCostProductRequestsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-product-requests/export"};
+  }
+  // ImportCostProductRequests imports cost product requests from Excel file.
+  // Create-only: every row creates a new DRAFT request, no dedup/merge.
+  rpc ImportCostProductRequests(ImportCostProductRequestsRequest) returns (ImportCostProductRequestsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/cost-product-requests/import"
+      body: "*"
+    };
+  }
+  // GetCostProductRequestImportTemplate downloads the Excel import template.
+  rpc GetCostProductRequestImportTemplate(GetCostProductRequestImportTemplateRequest) returns (GetCostProductRequestImportTemplateResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-product-requests/template"};
   }
 }
 
