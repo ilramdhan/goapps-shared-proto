@@ -99,13 +99,17 @@ message CostProductRequest {
 
 message SpecInput {
   // Deprecated for new writes: retained for historical rows, no longer populated by new writes.
-  string raw_material_type = 1 [(buf.validate.field).string = {
-    in: [
-      "POY_BOUGHTOUT",
-      "CHIPS_SD",
-      "CHIPS_BRT",
-      "CHIPS_RECYCLE"
-    ]
+  // Validation is skipped when empty so new writes (which always send "") pass.
+  string raw_material_type = 1 [(buf.validate.field) = {
+    ignore: IGNORE_IF_ZERO_VALUE
+    string: {
+      in: [
+        "POY_BOUGHTOUT",
+        "CHIPS_SD",
+        "CHIPS_BRT",
+        "CHIPS_RECYCLE"
+      ]
+    }
   }];
   string product_description = 2 [(buf.validate.field).string = {
     min_len: 1
@@ -115,19 +119,31 @@ message SpecInput {
   // Free-text or master shade code (e.g. NL, Z114S). Renamed from shade_custom_text — field number unchanged for wire compatibility.
   string shade_code = 4 [(buf.validate.field).string.max_len = 100];
   // Deprecated: retained for historical rows, no longer populated by new writes. Use tube_type instead.
-  int32 paper_tube_type_id = 5 [(buf.validate.field).int32.gte = 1];
-  // Deprecated for new writes: retained for historical rows, no longer populated by new writes.
-  string weight_per_bobbin_kg = 6 [(buf.validate.field).string = {
-    min_len: 1
-    max_len: 20
+  // Validation is skipped when zero so new writes (which always send 0) pass.
+  int32 paper_tube_type_id = 5 [(buf.validate.field) = {
+    ignore: IGNORE_IF_ZERO_VALUE
+    int32: {gte: 1}
   }];
   // Deprecated for new writes: retained for historical rows, no longer populated by new writes.
-  string box_type = 7 [(buf.validate.field).string = {
-    in: [
-      "JUMBO",
-      "NORMAL",
-      "PALLET"
-    ]
+  // Validation is skipped when empty so new writes (which always send "") pass.
+  string weight_per_bobbin_kg = 6 [(buf.validate.field) = {
+    ignore: IGNORE_IF_ZERO_VALUE
+    string: {
+      min_len: 1
+      max_len: 20
+    }
+  }];
+  // Deprecated for new writes: retained for historical rows, no longer populated by new writes.
+  // Validation is skipped when empty so new writes (which always send "") pass.
+  string box_type = 7 [(buf.validate.field) = {
+    ignore: IGNORE_IF_ZERO_VALUE
+    string: {
+      in: [
+        "JUMBO",
+        "NORMAL",
+        "PALLET"
+      ]
+    }
   }];
   // Human-readable shade name (e.g. Natural, Jet Black), mirrors cost_product_master's shade_name.
   string shade_name = 8 [(buf.validate.field).string.max_len = 100];
