@@ -749,3 +749,16 @@ When adding a new resource (e.g., `finance/v1/parameter.proto`):
 9. Run `buf format -w && buf lint && buf breaking --against '.git#branch=main'`.
 10. Generate code: `./scripts/gen-all.sh`.
 11. Verify generated output in both `goapps-backend/gen/` and `goapps-frontend/src/types/generated/`.
+
+---
+
+## 18. Improvement Notes
+
+Known gaps identified during a 2026-07 documentation audit — not blockers, but worth knowing before assuming full coverage:
+
+| Area | Severity | Note |
+|------|----------|------|
+| No batch/bulk operations | Medium | Consider `BatchCreate`, `BatchUpdate` RPC patterns |
+| No cursor-based pagination | Low | Current offset pagination may be slow at scale |
+| File upload lacks MIME type validation | Low | Only size is validated (max 10MB), not file type |
+| Permission code as string pattern | Low | Consider an enum for better type safety instead of the `service.module.entity.action` string convention |
