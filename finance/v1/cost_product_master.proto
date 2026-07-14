@@ -35,6 +35,8 @@ message CostProductMaster {
   string flex_01 = 18;
   string flex_02 = 19;
   string flex_03 = 20;
+  string source = 21; // origin marker, e.g. "MB_RECIPE" when auto-generated; empty if manually created
+  bool is_locked = 22; // true blocks manual edits to route/params; escape hatch via UnlockCostProductMaster
 }
 
 // =============================================================================
@@ -139,6 +141,25 @@ message DeactivateCostProductMasterRequest {
 
 message DeactivateCostProductMasterResponse {
   common.v1.BaseResponse base = 1;
+}
+
+// =============================================================================
+// Unlock — finance-admin escape hatch for MB-recipe-locked products. Clears
+// cpm_is_locked for 24h and records an mst_mb_lock_log audit row; the product
+// auto-relocks after the window (enforced server-side, not by this RPC).
+// =============================================================================
+
+message UnlockCostProductMasterRequest {
+  int64 product_sys_id = 1 [(buf.validate.field).int64.gte = 1];
+  string reason = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 500
+  }];
+}
+
+message UnlockCostProductMasterResponse {
+  common.v1.BaseResponse base = 1;
+  CostProductMaster data = 2;
 }
 
 // =============================================================================
@@ -268,6 +289,12 @@ service CostProductMasterService {
   }
   rpc DeactivateCostProductMaster(DeactivateCostProductMasterRequest) returns (DeactivateCostProductMasterResponse) {
     option (google.api.http) = {delete: "/api/v1/finance/cost-product-master/{product_sys_id}"};
+  }
+  rpc UnlockCostProductMaster(UnlockCostProductMasterRequest) returns (UnlockCostProductMasterResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/cost-product-master/{product_sys_id}/unlock"
+      body: "*"
+    };
   }
   rpc ListCostProductMasters(ListCostProductMastersRequest) returns (ListCostProductMastersResponse) {
     option (google.api.http) = {get: "/api/v1/finance/cost-product-master"};

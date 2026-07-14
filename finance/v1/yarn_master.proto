@@ -1215,8 +1215,50 @@ message MBHead {
   optional string mbh_final_product = 12;
   // Optional Oracle CMBH_CODE — product code.
   optional string mbh_code = 13;
+  // MB Costing Suite workflow state (mbh_entry_status). One of DRAFT/SUBMITTED/APPROVED/VALIDATED/UN_APPROVED/REVOKED.
+  string entry_status = 14;
+  // Whether this MB is a bought-out item (no internal spinning cost).
+  bool is_boughtout = 15;
   // Audit metadata.
   common.v1.AuditInfo audit = 16;
+  // Current composition version number (incremented on each validation).
+  int32 current_version = 17;
+  // Total fixed machine cost. NUMERIC(20,6) as string.
+  string machine_fixed_total = 18;
+  // Free-text reason captured on the most recent state transition.
+  string state_reason = 19;
+  // Development code.
+  string dev_code = 20;
+  // Shade code.
+  string shade_code = 21;
+  // Shade name.
+  string shade_name = 22;
+  // Cross-section descriptor.
+  string cross_section = 23;
+  // Lusture code (references MbLusture.code).
+  string lusture_code = 24;
+  // Generated cost-product ID once costing has been produced.
+  int64 cost_product_id = 25;
+  // Timestamp when cost was last generated.
+  string cost_generated_at = 26;
+  // User who last generated the cost.
+  string cost_generated_by = 27;
+  // Frozen param snapshot at VALIDATED — waste parameter value (mirrors mst_mb_param).
+  string param_waste = 28;
+  // Frozen param snapshot at VALIDATED — quality loss parameter value.
+  string param_quality_loss = 29;
+  // Frozen param snapshot at VALIDATED — efficiency parameter value.
+  string param_efficiency = 30;
+  // Frozen param snapshot at VALIDATED — development expense parameter value.
+  string param_dev_expense = 31;
+  // Frozen param snapshot at VALIDATED — packing parameter value.
+  string param_packing = 32;
+  // Frozen param snapshot at VALIDATED — MB production per day parameter value.
+  string param_mb_prod_per_day = 33;
+  // Frozen param snapshot at VALIDATED — throughput per hour; stores option code, e.g. "B".
+  string param_throughput_per_hour = 34;
+  // Frozen param snapshot at VALIDATED — number of process; stores option code, e.g. "D".
+  string param_no_of_process = 35;
 }
 
 // CreateMBHeadRequest is the request for creating an MB Head record.
@@ -1246,6 +1288,18 @@ message CreateMBHeadRequest {
   optional string mbh_final_product = 10 [(buf.validate.field).string.max_len = 200];
   // Optional Oracle CMBH_CODE (max 100 chars).
   optional string mbh_code = 11 [(buf.validate.field).string.max_len = 100];
+  // Whether this MB is a bought-out item (no internal spinning cost). Immutable after creation.
+  bool mbh_is_boughtout = 12;
+  // Development code (max 50 chars).
+  optional string mbh_dev_code = 13 [(buf.validate.field).string.max_len = 50];
+  // Shade code (max 20 chars).
+  optional string mbh_shade_code = 14 [(buf.validate.field).string.max_len = 20];
+  // Shade name (max 100 chars).
+  optional string mbh_shade_name = 15 [(buf.validate.field).string.max_len = 100];
+  // Cross-section descriptor (max 20 chars).
+  optional string mbh_cross_section = 16 [(buf.validate.field).string.max_len = 20];
+  // Lusture code, references MbLusture.code (max 10 chars).
+  optional string mbh_lusture_code = 17 [(buf.validate.field).string.max_len = 10];
 }
 
 // CreateMBHeadResponse is the response for creating an MB Head record.
@@ -1299,6 +1353,16 @@ message UpdateMBHeadRequest {
   optional string mbh_final_product = 11 [(buf.validate.field).string.max_len = 200];
   // Optional Oracle CMBH_CODE (max 100 chars).
   optional string mbh_code = 12 [(buf.validate.field).string.max_len = 100];
+  // Development code (max 50 chars).
+  optional string mbh_dev_code = 13 [(buf.validate.field).string.max_len = 50];
+  // Shade code (max 20 chars).
+  optional string mbh_shade_code = 14 [(buf.validate.field).string.max_len = 20];
+  // Shade name (max 100 chars).
+  optional string mbh_shade_name = 15 [(buf.validate.field).string.max_len = 100];
+  // Cross-section descriptor (max 20 chars).
+  optional string mbh_cross_section = 16 [(buf.validate.field).string.max_len = 20];
+  // Lusture code, references MbLusture.code (max 10 chars).
+  optional string mbh_lusture_code = 17 [(buf.validate.field).string.max_len = 10];
 }
 
 // UpdateMBHeadResponse is the response for updating an MB Head record.
@@ -1427,6 +1491,80 @@ message DownloadMBHeadTemplateResponse {
   bytes file_content = 2;
   // Excel file name.
   string file_name = 3;
+}
+
+// SubmitMBHeadRequest is the request for submitting an MB Head for approval.
+message SubmitMBHeadRequest {
+  // MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// SubmitMBHeadResponse is the response for submitting an MB Head for approval.
+message SubmitMBHeadResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated MB Head data.
+  MBHead data = 2;
+}
+
+// ApproveMBHeadRequest is the request for approving an MB Head.
+message ApproveMBHeadRequest {
+  // MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// ApproveMBHeadResponse is the response for approving an MB Head.
+message ApproveMBHeadResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated MB Head data.
+  MBHead data = 2;
+}
+
+// ValidateMBHeadRequest is the request for validating an MB Head (freezes cost/param snapshot).
+message ValidateMBHeadRequest {
+  // MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// ValidateMBHeadResponse is the response for validating an MB Head.
+message ValidateMBHeadResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated MB Head data.
+  MBHead data = 2;
+}
+
+// UnApproveMBHeadRequest is the request for reverting an MB Head out of the approved state.
+message UnApproveMBHeadRequest {
+  // MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+  // Reason for un-approving.
+  string reason = 2;
+}
+
+// UnApproveMBHeadResponse is the response for un-approving an MB Head.
+message UnApproveMBHeadResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated MB Head data.
+  MBHead data = 2;
+}
+
+// RevokeMBHeadRequest is the request for revoking an MB Head.
+message RevokeMBHeadRequest {
+  // MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+  // Reason for revoking. Required.
+  string reason = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+// RevokeMBHeadResponse is the response for revoking an MB Head.
+message RevokeMBHeadResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated MB Head data.
+  MBHead data = 2;
 }
 
 // =============================================================================
@@ -1959,6 +2097,41 @@ service MBHeadService {
   rpc DownloadMBHeadTemplate(DownloadMBHeadTemplateRequest) returns (DownloadMBHeadTemplateResponse) {
     option (google.api.http) = {get: "/api/v1/finance/mb-heads/template"};
   }
+  // SubmitMBHead submits an MB Head for approval.
+  rpc SubmitMBHead(SubmitMBHeadRequest) returns (SubmitMBHeadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-heads/{mbh_id}/submit"
+      body: "*"
+    };
+  }
+  // ApproveMBHead approves a submitted MB Head.
+  rpc ApproveMBHead(ApproveMBHeadRequest) returns (ApproveMBHeadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-heads/{mbh_id}/approve"
+      body: "*"
+    };
+  }
+  // ValidateMBHead validates an approved MB Head, freezing its cost and param snapshot.
+  rpc ValidateMBHead(ValidateMBHeadRequest) returns (ValidateMBHeadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-heads/{mbh_id}/validate"
+      body: "*"
+    };
+  }
+  // UnApproveMBHead reverts an approved MB Head back to a prior state.
+  rpc UnApproveMBHead(UnApproveMBHeadRequest) returns (UnApproveMBHeadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-heads/{mbh_id}/unapprove"
+      body: "*"
+    };
+  }
+  // RevokeMBHead revokes an MB Head.
+  rpc RevokeMBHead(RevokeMBHeadRequest) returns (RevokeMBHeadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-heads/{mbh_id}/revoke"
+      body: "*"
+    };
+  }
 }
 
 // MBSpinService manages Melange Batch spin detail data (child of MBHead).
@@ -2289,5 +2462,1080 @@ service YarnLookupFillService {
   // GetLookupFillValues returns numeric and text fills to auto-populate CAPP params.
   rpc GetLookupFillValues(GetLookupFillValuesRequest) returns (GetLookupFillValuesResponse) {
     option (google.api.http) = {get: "/api/v1/finance/lookup-fill-values"};
+  }
+}
+
+// =============================================================================
+// MESSAGES — MB Costing Suite: Composition, Lusture, Param, Cost, Logs
+// =============================================================================
+
+// MbComposition represents a single composition line for an MB Head (editable while DRAFT).
+message MbComposition {
+  // UUID primary key.
+  string mbcm_id = 1;
+  // Parent MB Head UUID.
+  string mbh_id = 2;
+  // Display sequence number within the head.
+  int32 seq_no = 3;
+  // Referenced RM group head UUID.
+  string group_head_id = 4;
+  // Composition percentage. NUMERIC(6,3) as string.
+  string composition_pct = 5;
+  // Source type: GROUP/MB/CARRIER.
+  string source_type = 6;
+  // Referenced MB Head UUID when source_type is MB. Nullable, empty string if unset.
+  string mb_ref_mbh_id = 7;
+  // Whether this line represents the carrier component.
+  bool is_carrier = 8;
+  // Legacy Oracle system ID for reconciliation.
+  string legacy_sys_id = 9;
+  // Audit metadata.
+  common.v1.AuditInfo audit = 10;
+}
+
+// MbCompositionVersion is a frozen snapshot of a composition line captured at validation time.
+message MbCompositionVersion {
+  // UUID primary key.
+  string mbcv_id = 1;
+  // Parent MB Head UUID.
+  string mbh_id = 2;
+  // Version number this snapshot belongs to.
+  int32 version = 3;
+  // Timestamp when this version was validated.
+  string validated_at = 4;
+  // User who validated this version.
+  string validated_by = 5;
+  // Display sequence number within the head.
+  int32 seq_no = 6;
+  // Referenced RM group head UUID.
+  string group_head_id = 7;
+  // Composition percentage. NUMERIC(6,3) as string.
+  string composition_pct = 8;
+  // Source type: GROUP/MB/CARRIER.
+  string source_type = 9;
+  // Referenced MB Head UUID when source_type is MB.
+  string mb_ref_mbh_id = 10;
+  // Whether this line represents the carrier component.
+  bool is_carrier = 11;
+}
+
+// MbLusture is a master lookup entry for MB lusture types.
+message MbLusture {
+  // UUID primary key.
+  string mbl_id = 1;
+  // Unique lusture code.
+  string code = 2;
+  // Display name.
+  string display_name = 3;
+  // Full description.
+  string full_description = 4;
+  // Category grouping.
+  string category = 5;
+  // Whether the record is active.
+  bool is_active = 6;
+  // Display ordering hint.
+  int32 display_order = 7;
+  // Audit metadata.
+  common.v1.AuditInfo audit = 8;
+}
+
+// MbParam is a master costing parameter definition (SCALAR or PICKLIST).
+message MbParam {
+  // UUID primary key.
+  string mbp_id = 1;
+  // Unique parameter code.
+  string code = 2;
+  // Display name.
+  string name = 3;
+  // Description.
+  string description = 4;
+  // Parameter type: SCALAR/PICKLIST.
+  string type = 5;
+  // Default numeric value. NUMERIC as string, empty if PICKLIST.
+  string default_value = 6;
+  // Default option code, empty if SCALAR.
+  string default_option = 7;
+  // Unit of measure label.
+  string unit = 8;
+  // Display ordering hint.
+  int32 display_order = 9;
+  // Whether the record is active.
+  bool is_active = 10;
+  // Audit metadata.
+  common.v1.AuditInfo audit = 11;
+  // Picklist options, populated when type is PICKLIST.
+  repeated MbParamOption options = 12;
+}
+
+// MbParamOption is a single picklist option belonging to an MbParam.
+message MbParamOption {
+  // UUID primary key.
+  string mbpo_id = 1;
+  // Parent parameter code.
+  string mbp_code = 2;
+  // Option code.
+  string code = 3;
+  // Numeric value represented by this option.
+  string numeric_value = 4;
+  // Description.
+  string description = 5;
+  // Display ordering hint.
+  int32 display_order = 6;
+  // Whether the record is active.
+  bool is_active = 7;
+}
+
+// MbCost represents a costed value for an MB Head for a given period and cost type.
+message MbCost {
+  // UUID primary key.
+  string mbc_id = 1;
+  // Parent MB Head UUID.
+  string mbh_id = 2;
+  // Period in YYYYMM format.
+  string period = 3;
+  // Cost type: ACTUAL/SELLING/FORECAST.
+  string cost_type = 4;
+  // Cost value. NUMERIC as string.
+  string cost_value = 5;
+  // Source cost-product-cost ID this value was pushed from.
+  int64 source_cpc_id = 6;
+  // Timestamp when this value was pushed.
+  string pushed_at = 7;
+  // User who pushed this value.
+  string pushed_by = 8;
+  // Whether this cost row is active.
+  bool is_active = 9;
+}
+
+// MbPushLog records a single push-to-head batch execution.
+message MbPushLog {
+  // UUID primary key.
+  string mbpl_id = 1;
+  // Period in YYYYMM format.
+  string period = 2;
+  // Timestamp when the push was executed.
+  string pushed_at = 3;
+  // User who executed the push.
+  string pushed_by = 4;
+  // Number of MB Heads affected.
+  int32 mb_count = 5;
+  // Number of cost rows written.
+  int32 row_count = 6;
+  // Comma-separated cost types pushed.
+  string cost_types = 7;
+  // Previous period, used for carry-forward comparisons.
+  string previous_period = 8;
+  // Free-text notes.
+  string notes = 9;
+}
+
+// MbWorkflowLog records a single workflow state transition for an MB Head.
+message MbWorkflowLog {
+  // UUID primary key.
+  string mbwl_id = 1;
+  // Parent MB Head UUID.
+  string mbh_id = 2;
+  // State transitioned from.
+  string from_state = 3;
+  // State transitioned to.
+  string to_state = 4;
+  // User who performed the transition.
+  string actor_user_id = 5;
+  // Timestamp of the transition.
+  string actor_at = 6;
+  // Reason captured for the transition, if any.
+  string reason = 7;
+  // Composition version at the time of the transition.
+  int32 version = 8;
+}
+
+// =============================================================================
+// MESSAGES — MB Composition CRUD (editable only while mbh_entry_status = DRAFT)
+// =============================================================================
+
+// CreateMbCompositionRequest is the request for creating an MB composition line.
+message CreateMbCompositionRequest {
+  // Parent MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+  // Display sequence number within the head.
+  int32 seq_no = 2 [(buf.validate.field).int32.gte = 0];
+  // Referenced RM group head UUID.
+  string group_head_id = 3 [(buf.validate.field).string.uuid = true];
+  // Composition percentage.
+  string composition_pct = 4 [(buf.validate.field).string.min_len = 1];
+  // Source type: GROUP/MB/CARRIER.
+  string source_type = 5 [(buf.validate.field).string = {
+    in: [
+      "GROUP",
+      "MB",
+      "CARRIER"
+    ]
+  }];
+  // Referenced MB Head UUID when source_type is MB.
+  string mb_ref_mbh_id = 6;
+  // Whether this line represents the carrier component.
+  bool is_carrier = 7;
+}
+
+// CreateMbCompositionResponse is the response for creating an MB composition line.
+message CreateMbCompositionResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Created composition line.
+  MbComposition data = 2;
+}
+
+// UpdateMbCompositionRequest is the request for updating an MB composition line.
+message UpdateMbCompositionRequest {
+  // Composition line UUID.
+  string mbcm_id = 1 [(buf.validate.field).string.uuid = true];
+  // Updated composition percentage.
+  string composition_pct = 2 [(buf.validate.field).string.min_len = 1];
+  // Updated referenced RM group head UUID.
+  string group_head_id = 3 [(buf.validate.field).string.uuid = true];
+  // Updated source type: GROUP/MB/CARRIER.
+  string source_type = 4 [(buf.validate.field).string = {
+    in: [
+      "GROUP",
+      "MB",
+      "CARRIER"
+    ]
+  }];
+  // Updated referenced MB Head UUID when source_type is MB.
+  string mb_ref_mbh_id = 5;
+  // Updated carrier flag.
+  bool is_carrier = 6;
+}
+
+// UpdateMbCompositionResponse is the response for updating an MB composition line.
+message UpdateMbCompositionResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated composition line.
+  MbComposition data = 2;
+}
+
+// DeleteMbCompositionRequest is the request for deleting an MB composition line.
+message DeleteMbCompositionRequest {
+  // Composition line UUID.
+  string mbcm_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteMbCompositionResponse is the response for deleting an MB composition line.
+message DeleteMbCompositionResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+}
+
+// ListMbCompositionsRequest is the request for listing composition lines for an MB Head.
+message ListMbCompositionsRequest {
+  // Parent MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// ListMbCompositionsResponse is the response for listing composition lines.
+message ListMbCompositionsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Composition lines.
+  repeated MbComposition data = 2;
+}
+
+// ListMbCompositionVersionsRequest is the request for listing frozen composition version snapshots.
+message ListMbCompositionVersionsRequest {
+  // Parent MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+  // Version number to fetch. 0 means latest.
+  int32 version = 2 [(buf.validate.field).int32.gte = 0];
+}
+
+// ListMbCompositionVersionsResponse is the response for listing composition version snapshots.
+message ListMbCompositionVersionsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Composition version snapshot lines.
+  repeated MbCompositionVersion data = 2;
+}
+
+// =============================================================================
+// MESSAGES — MB Lusture CRUD
+// =============================================================================
+
+// CreateMbLustureRequest is the request for creating an MB lusture master record.
+message CreateMbLustureRequest {
+  // Unique lusture code (1-10 chars).
+  string code = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 10
+  }];
+  // Display name.
+  string display_name = 2 [(buf.validate.field).string.max_len = 100];
+  // Full description.
+  string full_description = 3 [(buf.validate.field).string.max_len = 500];
+  // Category grouping.
+  string category = 4 [(buf.validate.field).string.max_len = 100];
+  // Whether the record is active.
+  bool is_active = 5;
+  // Display ordering hint.
+  int32 display_order = 6;
+}
+
+// CreateMbLustureResponse is the response for creating an MB lusture master record.
+message CreateMbLustureResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Created lusture record.
+  MbLusture data = 2;
+}
+
+// UpdateMbLustureRequest is the request for updating an MB lusture master record.
+message UpdateMbLustureRequest {
+  // Lusture UUID.
+  string mbl_id = 1 [(buf.validate.field).string.uuid = true];
+  // Updated display name.
+  string display_name = 2 [(buf.validate.field).string.max_len = 100];
+  // Updated full description.
+  string full_description = 3 [(buf.validate.field).string.max_len = 500];
+  // Updated category grouping.
+  string category = 4 [(buf.validate.field).string.max_len = 100];
+  // Updated active status.
+  bool is_active = 5;
+  // Updated display ordering hint.
+  int32 display_order = 6;
+}
+
+// UpdateMbLustureResponse is the response for updating an MB lusture master record.
+message UpdateMbLustureResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated lusture record.
+  MbLusture data = 2;
+}
+
+// DeleteMbLustureRequest is the request for deleting an MB lusture master record.
+message DeleteMbLustureRequest {
+  // Lusture UUID.
+  string mbl_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteMbLustureResponse is the response for deleting an MB lusture master record.
+message DeleteMbLustureResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+}
+
+// GetMbLustureRequest is the request for retrieving an MB lusture master record by ID.
+message GetMbLustureRequest {
+  // Lusture UUID.
+  string mbl_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetMbLustureResponse is the response for retrieving an MB lusture master record.
+message GetMbLustureResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Lusture record.
+  MbLusture data = 2;
+}
+
+// ListMbLustureRequest is the request for listing MB lusture master records.
+message ListMbLustureRequest {
+  // Page number (≥ 1).
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  // Page size (1-100).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Full-text search across code and display_name.
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  // Sort field.
+  string sort_by = 4 [(buf.validate.field).string = {
+    in: [
+      "",
+      "code",
+      "display_name",
+      "category",
+      "created_at"
+    ]
+  }];
+  // Sort direction.
+  string sort_dir = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+  // Filter by active status.
+  ActiveFilter active_filter = 6;
+}
+
+// ListMbLustureResponse is the response for listing MB lusture master records.
+message ListMbLustureResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Lusture records.
+  repeated MbLusture data = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ExportMbLustureRequest is the request for exporting MB lusture master records to Excel.
+message ExportMbLustureRequest {
+  // Filter by active status.
+  ActiveFilter active_filter = 1;
+}
+
+// ExportMbLustureResponse is the response for exporting MB lusture master records.
+message ExportMbLustureResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Excel file content.
+  bytes file_content = 2;
+  // Excel file name.
+  string file_name = 3;
+}
+
+// ImportMbLustureRequest is the request for importing MB lusture master records from Excel.
+message ImportMbLustureRequest {
+  // Excel file content (max 10 MB).
+  bytes file_content = 1 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 10485760
+  }];
+  // Excel file name.
+  string file_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 255
+  }];
+  // How to handle duplicate codes.
+  string duplicate_action = 3 [(buf.validate.field).string = {
+    in: [
+      "skip",
+      "update",
+      "error"
+    ]
+  }];
+}
+
+// ImportMbLustureResponse is the response for importing MB lusture master records.
+message ImportMbLustureResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Number of successfully created records.
+  int32 success_count = 2;
+  // Number of skipped records.
+  int32 skipped_count = 3;
+  // Number of failed records.
+  int32 failed_count = 4;
+  // Per-row import errors.
+  repeated ImportError errors = 5;
+}
+
+// DownloadMbLustureTemplateRequest is the request for downloading the import template.
+message DownloadMbLustureTemplateRequest {}
+
+// DownloadMbLustureTemplateResponse is the response for downloading the import template.
+message DownloadMbLustureTemplateResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Excel template file content.
+  bytes file_content = 2;
+  // Excel file name.
+  string file_name = 3;
+}
+
+// =============================================================================
+// MESSAGES — MB Param CRUD (Param + nested Options)
+// =============================================================================
+
+// CreateMbParamRequest is the request for creating an MB costing parameter.
+message CreateMbParamRequest {
+  // Unique parameter code (1-30 chars).
+  string code = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 30
+  }];
+  // Display name.
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+  // Description.
+  string description = 3 [(buf.validate.field).string.max_len = 500];
+  // Parameter type: SCALAR/PICKLIST.
+  string type = 4 [(buf.validate.field).string = {
+    in: [
+      "SCALAR",
+      "PICKLIST"
+    ]
+  }];
+  // Default numeric value, empty if PICKLIST.
+  string default_value = 5 [(buf.validate.field).string.max_len = 30];
+  // Default option code, empty if SCALAR.
+  string default_option = 6 [(buf.validate.field).string.max_len = 10];
+  // Unit of measure label.
+  string unit = 7 [(buf.validate.field).string.max_len = 30];
+  // Display ordering hint.
+  int32 display_order = 8;
+  // Whether the record is active.
+  bool is_active = 9;
+}
+
+// CreateMbParamResponse is the response for creating an MB costing parameter.
+message CreateMbParamResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Created parameter record.
+  MbParam data = 2;
+}
+
+// UpdateMbParamRequest is the request for updating an MB costing parameter.
+message UpdateMbParamRequest {
+  // Parameter UUID.
+  string mbp_id = 1 [(buf.validate.field).string.uuid = true];
+  // Updated display name.
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+  // Updated description.
+  string description = 3 [(buf.validate.field).string.max_len = 500];
+  // Updated default numeric value.
+  string default_value = 4 [(buf.validate.field).string.max_len = 30];
+  // Updated default option code.
+  string default_option = 5 [(buf.validate.field).string.max_len = 10];
+  // Updated unit of measure label.
+  string unit = 6 [(buf.validate.field).string.max_len = 30];
+  // Updated display ordering hint.
+  int32 display_order = 7;
+  // Updated active status.
+  bool is_active = 8;
+}
+
+// UpdateMbParamResponse is the response for updating an MB costing parameter.
+message UpdateMbParamResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated parameter record.
+  MbParam data = 2;
+}
+
+// DeleteMbParamRequest is the request for deleting an MB costing parameter.
+message DeleteMbParamRequest {
+  // Parameter UUID.
+  string mbp_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteMbParamResponse is the response for deleting an MB costing parameter.
+message DeleteMbParamResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+}
+
+// ListMbParamsRequest is the request for listing MB costing parameters.
+message ListMbParamsRequest {
+  // Page number (≥ 1).
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  // Page size (1-100).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Full-text search across code and name.
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  // Sort field.
+  string sort_by = 4 [(buf.validate.field).string = {
+    in: [
+      "",
+      "code",
+      "name",
+      "type",
+      "created_at"
+    ]
+  }];
+  // Sort direction.
+  string sort_dir = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+  // Filter by active status.
+  ActiveFilter active_filter = 6;
+}
+
+// ListMbParamsResponse is the response for listing MB costing parameters.
+message ListMbParamsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Parameter records.
+  repeated MbParam data = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ExportMbParamsRequest is the request for exporting MB costing parameters to Excel.
+message ExportMbParamsRequest {
+  // Filter by active status.
+  ActiveFilter active_filter = 1;
+}
+
+// ExportMbParamsResponse is the response for exporting MB costing parameters.
+message ExportMbParamsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Excel file content.
+  bytes file_content = 2;
+  // Excel file name.
+  string file_name = 3;
+}
+
+// ImportMbParamsRequest is the request for importing MB costing parameters from Excel.
+message ImportMbParamsRequest {
+  // Excel file content (max 10 MB).
+  bytes file_content = 1 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 10485760
+  }];
+  // Excel file name.
+  string file_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 255
+  }];
+  // How to handle duplicate codes.
+  string duplicate_action = 3 [(buf.validate.field).string = {
+    in: [
+      "skip",
+      "update",
+      "error"
+    ]
+  }];
+}
+
+// ImportMbParamsResponse is the response for importing MB costing parameters.
+message ImportMbParamsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Number of successfully created records.
+  int32 success_count = 2;
+  // Number of skipped records.
+  int32 skipped_count = 3;
+  // Number of failed records.
+  int32 failed_count = 4;
+  // Per-row import errors.
+  repeated ImportError errors = 5;
+}
+
+// DownloadMbParamTemplateRequest is the request for downloading the import template.
+message DownloadMbParamTemplateRequest {}
+
+// DownloadMbParamTemplateResponse is the response for downloading the import template.
+message DownloadMbParamTemplateResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Excel template file content.
+  bytes file_content = 2;
+  // Excel file name.
+  string file_name = 3;
+}
+
+// CreateMbParamOptionRequest is the request for creating an MB param picklist option.
+message CreateMbParamOptionRequest {
+  // Parent parameter code.
+  string mbp_code = 1 [(buf.validate.field).string.min_len = 1];
+  // Option code (1-10 chars).
+  string code = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 10
+  }];
+  // Numeric value represented by this option.
+  string numeric_value = 3 [(buf.validate.field).string.min_len = 1];
+  // Description.
+  string description = 4;
+  // Display ordering hint.
+  int32 display_order = 5;
+  // Whether the record is active.
+  bool is_active = 6;
+}
+
+// CreateMbParamOptionResponse is the response for creating an MB param picklist option.
+message CreateMbParamOptionResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Created option record.
+  MbParamOption data = 2;
+}
+
+// UpdateMbParamOptionRequest is the request for updating an MB param picklist option.
+message UpdateMbParamOptionRequest {
+  // Option UUID.
+  string mbpo_id = 1 [(buf.validate.field).string.uuid = true];
+  // Updated numeric value.
+  string numeric_value = 2 [(buf.validate.field).string.min_len = 1];
+  // Updated description.
+  string description = 3;
+  // Updated display ordering hint.
+  int32 display_order = 4;
+  // Updated active status.
+  bool is_active = 5;
+}
+
+// UpdateMbParamOptionResponse is the response for updating an MB param picklist option.
+message UpdateMbParamOptionResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated option record.
+  MbParamOption data = 2;
+}
+
+// DeleteMbParamOptionRequest is the request for deleting an MB param picklist option.
+message DeleteMbParamOptionRequest {
+  // Option UUID.
+  string mbpo_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteMbParamOptionResponse is the response for deleting an MB param picklist option.
+message DeleteMbParamOptionResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+}
+
+// =============================================================================
+// MESSAGES — MB Push-to-Head
+// =============================================================================
+
+// PreviewPushToHeadRequest is the request for previewing which MB Heads are pushable for a period.
+message PreviewPushToHeadRequest {
+  // Period in YYYYMM format.
+  string period = 1 [(buf.validate.field).string.pattern = "^[0-9]{6}$"];
+}
+
+// PushableMbHead describes an MB Head eligible to receive pushed costs for the previewed period.
+message PushableMbHead {
+  // MB Head UUID.
+  string mbh_id = 1;
+  // Batch cost code.
+  string code = 2;
+  // Management display name.
+  string name = 3;
+  // Whether an ACTUAL cost value is available to push.
+  bool has_actual = 4;
+  // Whether a SELLING cost value is available to push.
+  bool has_selling = 5;
+  // Whether a FORECAST cost value is available to push.
+  bool has_forecast = 6;
+}
+
+// SkippedMbHead describes an MB Head excluded from the push, with the reason why.
+message SkippedMbHead {
+  // MB Head UUID.
+  string mbh_id = 1;
+  // Batch cost code.
+  string code = 2;
+  // Management display name.
+  string name = 3;
+  // Reason this head was skipped.
+  string reason = 4;
+}
+
+// PreviewPushToHeadResponse is the response listing pushable and skipped MB Heads for a period.
+message PreviewPushToHeadResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // MB Heads eligible for push.
+  repeated PushableMbHead pushable = 2;
+  // MB Heads excluded from push, with reasons.
+  repeated SkippedMbHead skipped = 3;
+}
+
+// ExecutePushToHeadRequest is the request for executing a push-to-head batch for a period.
+message ExecutePushToHeadRequest {
+  // Period in YYYYMM format.
+  string period = 1 [(buf.validate.field).string.pattern = "^[0-9]{6}$"];
+  // MB Head UUIDs to push.
+  repeated string mb_head_ids = 2 [(buf.validate.field).repeated.min_items = 1];
+}
+
+// ExecutePushToHeadResponse is the response for executing a push-to-head batch.
+message ExecutePushToHeadResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Resulting push log record.
+  MbPushLog data = 2;
+}
+
+// ListMbPushLogsRequest is the request for listing push-to-head batch logs.
+message ListMbPushLogsRequest {
+  // Page number (≥ 1).
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  // Page size (1-100).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Filter by period in YYYYMM format. Optional — omit or send empty for no filter.
+  string period = 3 [(buf.validate.field) = {
+    ignore: IGNORE_IF_ZERO_VALUE
+    string: {pattern: "^[0-9]{6}$"}
+  }];
+}
+
+// ListMbPushLogsResponse is the response for listing push-to-head batch logs.
+message ListMbPushLogsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Push log records.
+  repeated MbPushLog data = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// =============================================================================
+// MESSAGES — MB Workflow Log (read-only, Audit tab)
+// =============================================================================
+
+// ListMbWorkflowLogsRequest is the request for listing workflow transition logs for an MB Head.
+message ListMbWorkflowLogsRequest {
+  // Parent MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// ListMbWorkflowLogsResponse is the response for listing workflow transition logs.
+message ListMbWorkflowLogsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Workflow log records.
+  repeated MbWorkflowLog data = 2;
+}
+
+// =============================================================================
+// SERVICE — MbComposition
+// =============================================================================
+
+// MbCompositionService manages MB composition lines and their frozen versions.
+service MbCompositionService {
+  // CreateMbComposition creates a new composition line for an MB Head.
+  rpc CreateMbComposition(CreateMbCompositionRequest) returns (CreateMbCompositionResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-compositions"
+      body: "*"
+    };
+  }
+  // UpdateMbComposition updates an existing composition line.
+  rpc UpdateMbComposition(UpdateMbCompositionRequest) returns (UpdateMbCompositionResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/mb-compositions/{mbcm_id}"
+      body: "*"
+    };
+  }
+  // DeleteMbComposition deletes a composition line.
+  rpc DeleteMbComposition(DeleteMbCompositionRequest) returns (DeleteMbCompositionResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/mb-compositions/{mbcm_id}"};
+  }
+  // ListMbCompositions lists composition lines for an MB Head.
+  rpc ListMbCompositions(ListMbCompositionsRequest) returns (ListMbCompositionsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/mb-compositions"};
+  }
+  // ListMbCompositionVersions lists frozen composition version snapshots for an MB Head.
+  rpc ListMbCompositionVersions(ListMbCompositionVersionsRequest) returns (ListMbCompositionVersionsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/mb-composition-versions"};
+  }
+}
+
+// =============================================================================
+// SERVICE — MbLusture
+// =============================================================================
+
+// MbLustureService manages MB lusture master data.
+service MbLustureService {
+  // CreateMbLusture creates a new MB lusture master record.
+  rpc CreateMbLusture(CreateMbLustureRequest) returns (CreateMbLustureResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/master/mb-lustures"
+      body: "*"
+    };
+  }
+  // UpdateMbLusture updates an existing MB lusture master record.
+  rpc UpdateMbLusture(UpdateMbLustureRequest) returns (UpdateMbLustureResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/master/mb-lustures/{mbl_id}"
+      body: "*"
+    };
+  }
+  // DeleteMbLusture deletes an MB lusture master record.
+  rpc DeleteMbLusture(DeleteMbLustureRequest) returns (DeleteMbLustureResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/master/mb-lustures/{mbl_id}"};
+  }
+  // GetMbLusture retrieves an MB lusture master record by ID.
+  rpc GetMbLusture(GetMbLustureRequest) returns (GetMbLustureResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/master/mb-lustures/{mbl_id}"};
+  }
+  // ListMbLusture lists MB lusture master records with search and pagination.
+  rpc ListMbLusture(ListMbLustureRequest) returns (ListMbLustureResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/master/mb-lustures"};
+  }
+  // ExportMbLusture exports MB lusture master records to Excel.
+  rpc ExportMbLusture(ExportMbLustureRequest) returns (ExportMbLustureResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/master/mb-lustures/export"};
+  }
+  // ImportMbLusture imports MB lusture master records from Excel.
+  rpc ImportMbLusture(ImportMbLustureRequest) returns (ImportMbLustureResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/master/mb-lustures/import"
+      body: "*"
+    };
+  }
+  // DownloadMbLustureTemplate downloads the Excel import template.
+  rpc DownloadMbLustureTemplate(DownloadMbLustureTemplateRequest) returns (DownloadMbLustureTemplateResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/master/mb-lustures/template"};
+  }
+}
+
+// =============================================================================
+// SERVICE — MbParam
+// =============================================================================
+
+// MbParamService manages MB costing parameter master data and their picklist options.
+service MbParamService {
+  // CreateMbParam creates a new MB costing parameter.
+  rpc CreateMbParam(CreateMbParamRequest) returns (CreateMbParamResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/master/mb-params"
+      body: "*"
+    };
+  }
+  // UpdateMbParam updates an existing MB costing parameter.
+  rpc UpdateMbParam(UpdateMbParamRequest) returns (UpdateMbParamResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/master/mb-params/{mbp_id}"
+      body: "*"
+    };
+  }
+  // DeleteMbParam deletes an MB costing parameter.
+  rpc DeleteMbParam(DeleteMbParamRequest) returns (DeleteMbParamResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/master/mb-params/{mbp_id}"};
+  }
+  // ListMbParams lists MB costing parameters with search and pagination.
+  rpc ListMbParams(ListMbParamsRequest) returns (ListMbParamsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/master/mb-params"};
+  }
+  // CreateMbParamOption creates a new picklist option for an MB costing parameter.
+  rpc CreateMbParamOption(CreateMbParamOptionRequest) returns (CreateMbParamOptionResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/master/mb-param-options"
+      body: "*"
+    };
+  }
+  // UpdateMbParamOption updates an existing picklist option.
+  rpc UpdateMbParamOption(UpdateMbParamOptionRequest) returns (UpdateMbParamOptionResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/master/mb-param-options/{mbpo_id}"
+      body: "*"
+    };
+  }
+  // DeleteMbParamOption deletes a picklist option.
+  rpc DeleteMbParamOption(DeleteMbParamOptionRequest) returns (DeleteMbParamOptionResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/master/mb-param-options/{mbpo_id}"};
+  }
+  // ExportMbParams exports MB costing parameters to Excel.
+  rpc ExportMbParams(ExportMbParamsRequest) returns (ExportMbParamsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/master/mb-params/export"};
+  }
+  // ImportMbParams imports MB costing parameters from Excel.
+  rpc ImportMbParams(ImportMbParamsRequest) returns (ImportMbParamsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/master/mb-params/import"
+      body: "*"
+    };
+  }
+  // DownloadMbParamTemplate downloads the Excel import template.
+  rpc DownloadMbParamTemplate(DownloadMbParamTemplateRequest) returns (DownloadMbParamTemplateResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/master/mb-params/template"};
+  }
+}
+
+// =============================================================================
+// SERVICE — MbPush
+// =============================================================================
+
+// MbPushService previews and executes pushing costed values to MB Heads for a period.
+service MbPushService {
+  // PreviewPushToHead previews which MB Heads are pushable/skipped for a period.
+  rpc PreviewPushToHead(PreviewPushToHeadRequest) returns (PreviewPushToHeadResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/mb-push-to-head/preview"};
+  }
+  // ExecutePushToHead executes the push-to-head batch for the given period and heads.
+  rpc ExecutePushToHead(ExecutePushToHeadRequest) returns (ExecutePushToHeadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-push-to-head/execute"
+      body: "*"
+    };
+  }
+  // ListMbPushLogs lists past push-to-head batch executions.
+  rpc ListMbPushLogs(ListMbPushLogsRequest) returns (ListMbPushLogsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/mb-push-to-head/logs"};
+  }
+}
+
+// =============================================================================
+// SERVICE — MbWorkflowLog
+// =============================================================================
+
+// MbWorkflowLogService provides read-only access to MB Head workflow transition history.
+service MbWorkflowLogService {
+  // ListMbWorkflowLogs lists workflow transition log entries for an MB Head.
+  rpc ListMbWorkflowLogs(ListMbWorkflowLogsRequest) returns (ListMbWorkflowLogsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/mb-heads/{mbh_id}/workflow-logs"};
+  }
+}
+
+// =============================================================================
+// MESSAGES — MB_BATCH cost calc trigger
+// =============================================================================
+
+// TriggerMbBatchRequest is the request to compute cst_product_cost rows for every
+// VALIDATED MB Head, for the given period, across all 3 calculation types.
+message TriggerMbBatchRequest {
+  // Period in YYYYMM format.
+  string period = 1 [(buf.validate.field).string.pattern = "^[0-9]{6}$"];
+}
+
+// MbBatchError records one MB Head's compute failure within a batch run.
+message MbBatchError {
+  // MB Head UUID.
+  string mbh_id = 1;
+  // Failure detail.
+  string error = 2;
+}
+
+// TriggerMbBatchResponse summarizes an MB_BATCH run's outcome.
+message TriggerMbBatchResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Underlying cal_job id created for this run.
+  int64 job_id = 2;
+  // Period computed, in YYYYMM format.
+  string period = 3;
+  // Count of MB Heads successfully computed.
+  int32 success_count = 4;
+  // Count of MB Heads that failed to compute.
+  int32 failed_count = 5;
+  // Total cst_product_cost rows inserted (3 per successful MB Head).
+  int32 rows_inserted = 6;
+  // Wall-clock duration of the run, in milliseconds.
+  int64 duration_ms = 7;
+  // Per-MB failure details, one entry per failed MB Head.
+  repeated MbBatchError errors = 8;
+}
+
+// =============================================================================
+// SERVICE — MbBatch
+// =============================================================================
+
+// MbBatchService triggers the MB_BATCH cost calculation orchestration.
+service MbBatchService {
+  // TriggerMbBatch computes cst_product_cost rows for every VALIDATED MB Head for a period.
+  rpc TriggerMbBatch(TriggerMbBatchRequest) returns (TriggerMbBatchResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-batch/trigger"
+      body: "*"
+    };
   }
 }
