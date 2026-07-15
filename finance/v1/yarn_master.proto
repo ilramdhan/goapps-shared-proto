@@ -1259,6 +1259,8 @@ message MBHead {
   string param_throughput_per_hour = 34;
   // Frozen param snapshot at VALIDATED — number of process; stores option code, e.g. "D".
   string param_no_of_process = 35;
+  // Machine assigned for MACHINE_MB_FIXED_TOTAL cost resolution (references mst_machine.mc_id). Optional.
+  optional string machine_id = 36 [(buf.validate.field).string.uuid = true];
 }
 
 // CreateMBHeadRequest is the request for creating an MB Head record.
@@ -1300,6 +1302,8 @@ message CreateMBHeadRequest {
   optional string mbh_cross_section = 16 [(buf.validate.field).string.max_len = 20];
   // Lusture code, references MbLusture.code (max 10 chars).
   optional string mbh_lusture_code = 17 [(buf.validate.field).string.max_len = 10];
+  // Machine assigned for MACHINE_MB_FIXED_TOTAL cost resolution (references mst_machine.mc_id).
+  optional string mbh_machine_id = 18 [(buf.validate.field).string.uuid = true];
 }
 
 // CreateMBHeadResponse is the response for creating an MB Head record.
@@ -1363,6 +1367,8 @@ message UpdateMBHeadRequest {
   optional string mbh_cross_section = 16 [(buf.validate.field).string.max_len = 20];
   // Lusture code, references MbLusture.code (max 10 chars).
   optional string mbh_lusture_code = 17 [(buf.validate.field).string.max_len = 10];
+  // Machine assigned for MACHINE_MB_FIXED_TOTAL cost resolution (references mst_machine.mc_id).
+  optional string mbh_machine_id = 18 [(buf.validate.field).string.uuid = true];
 }
 
 // UpdateMBHeadResponse is the response for updating an MB Head record.
