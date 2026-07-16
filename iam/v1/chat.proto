@@ -1,0 +1,537 @@
+syntax = "proto3";
+
+package iam.v1;
+
+// Note: go_package is managed by buf.gen.yaml managed mode
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "google/api/annotations.proto";
+
+// =============================================================================
+// SERVICE DEFINITIONS
+// =============================================================================
+
+// ChatService manages real-time chat conversations and messaging.
+service ChatService {
+  // CreateDirectConversation creates a 1:1 direct message conversation with another user.
+  rpc CreateDirectConversation(CreateDirectConversationRequest) returns (CreateDirectConversationResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/iam/chat/conversations/direct"
+      body: "*"
+    };
+  }
+
+  // CreateGroupConversation creates a group conversation with multiple participants.
+  rpc CreateGroupConversation(CreateGroupConversationRequest) returns (CreateGroupConversationResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/iam/chat/conversations/group"
+      body: "*"
+    };
+  }
+
+  // GetConversation returns a single conversation by ID.
+  rpc GetConversation(GetConversationRequest) returns (GetConversationResponse) {
+    option (google.api.http) = {get: "/api/v1/iam/chat/conversations/{conversation_id}"};
+  }
+
+  // ListConversations returns paginated conversations for the current user.
+  rpc ListConversations(ListConversationsRequest) returns (ListConversationsResponse) {
+    option (google.api.http) = {get: "/api/v1/iam/chat/conversations"};
+  }
+
+  // UpdateGroupConversation updates a group conversation name or avatar.
+  rpc UpdateGroupConversation(UpdateGroupConversationRequest) returns (UpdateGroupConversationResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/iam/chat/conversations/{conversation_id}"
+      body: "*"
+    };
+  }
+
+  // AddParticipants adds users to a group conversation.
+  rpc AddParticipants(AddParticipantsRequest) returns (AddParticipantsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/iam/chat/conversations/{conversation_id}/participants"
+      body: "*"
+    };
+  }
+
+  // RemoveParticipant removes a user from a group conversation.
+  rpc RemoveParticipant(RemoveParticipantRequest) returns (RemoveParticipantResponse) {
+    option (google.api.http) = {delete: "/api/v1/iam/chat/conversations/{conversation_id}/participants/{user_id}"};
+  }
+
+  // LeaveConversation allows the current user to leave a group conversation.
+  rpc LeaveConversation(LeaveConversationRequest) returns (LeaveConversationResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/iam/chat/conversations/{conversation_id}/leave"
+      body: "*"
+    };
+  }
+
+  // SendMessage sends a new message to a conversation.
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/iam/chat/conversations/{conversation_id}/messages"
+      body: "*"
+    };
+  }
+
+  // EditMessage edits an existing message body.
+  rpc EditMessage(EditMessageRequest) returns (EditMessageResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/iam/chat/conversations/{conversation_id}/messages/{message_id}"
+      body: "*"
+    };
+  }
+
+  // DeleteMessage soft-deletes a message in a conversation.
+  rpc DeleteMessage(DeleteMessageRequest) returns (DeleteMessageResponse) {
+    option (google.api.http) = {delete: "/api/v1/iam/chat/conversations/{conversation_id}/messages/{message_id}"};
+  }
+
+  // ListMessages returns paginated messages for a conversation using cursor-based pagination.
+  rpc ListMessages(ListMessagesRequest) returns (ListMessagesResponse) {
+    option (google.api.http) = {get: "/api/v1/iam/chat/conversations/{conversation_id}/messages"};
+  }
+
+  // StreamChatEvents opens a server-streaming connection for real-time chat events.
+  rpc StreamChatEvents(StreamChatEventsRequest) returns (stream StreamChatEventsResponse) {
+    option (google.api.http) = {get: "/api/v1/iam/chat/events"};
+  }
+
+  // MarkConversationRead marks all messages in a conversation as read by the current user.
+  rpc MarkConversationRead(MarkConversationReadRequest) returns (MarkConversationReadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/iam/chat/conversations/{conversation_id}/read"
+      body: "*"
+    };
+  }
+
+  // ClearConversationHistory clears the calling user's own view of a conversation's
+  // message history. Messages remain visible to other participants.
+  rpc ClearConversationHistory(ClearConversationHistoryRequest) returns (ClearConversationHistoryResponse) {
+    option (google.api.http) = {delete: "/api/v1/iam/chat/conversations/{conversation_id}/history"};
+  }
+
+  // SetTyping sets the typing indicator for the current user in a conversation.
+  rpc SetTyping(SetTypingRequest) returns (SetTypingResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/iam/chat/conversations/{conversation_id}/typing"
+      body: "*"
+    };
+  }
+
+  // GetMessageEditHistory returns the edit history for a specific message.
+  rpc GetMessageEditHistory(GetMessageEditHistoryRequest) returns (GetMessageEditHistoryResponse) {
+    option (google.api.http) = {get: "/api/v1/iam/chat/conversations/{conversation_id}/messages/{message_id}/history"};
+  }
+
+  // UploadChatAttachment uploads a file to a conversation and returns its
+  // attachment metadata. The returned attachment_id is passed to SendMessage.
+  rpc UploadChatAttachment(UploadChatAttachmentRequest) returns (UploadChatAttachmentResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/iam/chat/conversations/{conversation_id}/attachments"
+      body: "*"
+    };
+  }
+}
+
+// PresenceService tracks user online status via heartbeat and exposes online user lists.
+service PresenceService {
+  // Heartbeat updates the current user online presence with a TTL-based expiry.
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/iam/presence/heartbeat"
+      body: "*"
+    };
+  }
+
+  // GetOnlineUsers returns the list of currently online user IDs.
+  rpc GetOnlineUsers(GetOnlineUsersRequest) returns (GetOnlineUsersResponse) {
+    option (google.api.http) = {get: "/api/v1/iam/presence/online"};
+  }
+}
+
+// =============================================================================
+// ENTITY MESSAGES
+// =============================================================================
+
+// ConversationProto represents a chat conversation (direct or group).
+message ConversationProto {
+  string conversation_id = 1;
+  string type = 2;
+  string name = 3;
+  string avatar_url = 4;
+  repeated ParticipantProto participants = 5;
+  MessageProto last_message = 6;
+  int32 unread_count = 7;
+  string created_at = 8;
+  string updated_at = 9;
+}
+
+// ParticipantProto represents a user participating in a conversation.
+message ParticipantProto {
+  string user_id = 1;
+  string username = 2;
+  string full_name = 3;
+  string avatar_url = 4;
+  string role = 5;
+  bool is_online = 6;
+  string joined_at = 7;
+}
+
+// MessageProto represents a single chat message with decrypted body.
+message MessageProto {
+  string message_id = 1;
+  string conversation_id = 2;
+  string sender_user_id = 3;
+  string sender_name = 4;
+  string body = 5;
+  bool is_edited = 6;
+  bool is_deleted = 7;
+  string reply_to_id = 8;
+  repeated ReadReceiptProto read_receipts = 9;
+  string created_at = 10;
+  string updated_at = 11;
+  repeated AttachmentProto attachments = 12;
+}
+
+// AttachmentProto represents a file or image attached to a chat message.
+message AttachmentProto {
+  string attachment_id = 1;
+  string file_name = 2;
+  string file_url = 3;
+  string content_type = 4;
+  int64 file_size = 5;
+  string thumbnail_url = 6;
+}
+
+// ReadReceiptProto represents a read receipt for a message.
+message ReadReceiptProto {
+  string user_id = 1;
+  string read_at = 2;
+}
+
+// EditHistoryEntryProto represents a single edit history entry for a message.
+message EditHistoryEntryProto {
+  int64 history_id = 1;
+  string body = 2;
+  string edited_by = 3;
+  string edited_at = 4;
+}
+
+// =============================================================================
+// REQUEST MESSAGES
+// =============================================================================
+
+// CreateDirectConversationRequest creates a 1:1 direct conversation.
+message CreateDirectConversationRequest {
+  string peer_user_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// CreateGroupConversationRequest creates a group conversation.
+message CreateGroupConversationRequest {
+  string name = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  repeated string participant_ids = 2 [(buf.validate.field).repeated.min_items = 1];
+}
+
+// GetConversationRequest retrieves a conversation by ID.
+message GetConversationRequest {
+  string conversation_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// ListConversationsRequest lists conversations for the current user.
+message ListConversationsRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+}
+
+// UpdateGroupConversationRequest updates a group conversation.
+message UpdateGroupConversationRequest {
+  string conversation_id = 1 [(buf.validate.field).string.uuid = true];
+  string name = 2 [(buf.validate.field).string.max_len = 200];
+  string avatar_url = 3 [(buf.validate.field).string.max_len = 2048];
+}
+
+// AddParticipantsRequest adds users to a group conversation.
+message AddParticipantsRequest {
+  string conversation_id = 1 [(buf.validate.field).string.uuid = true];
+  repeated string user_ids = 2 [(buf.validate.field).repeated.min_items = 1];
+}
+
+// RemoveParticipantRequest removes a user from a group conversation.
+message RemoveParticipantRequest {
+  string conversation_id = 1 [(buf.validate.field).string.uuid = true];
+  string user_id = 2 [(buf.validate.field).string.uuid = true];
+}
+
+// LeaveConversationRequest allows the current user to leave a group conversation.
+message LeaveConversationRequest {
+  string conversation_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// SendMessageRequest sends a message to a conversation.
+message SendMessageRequest {
+  string conversation_id = 1 [(buf.validate.field).string.uuid = true];
+  string body = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 10000
+  }];
+  // ID of the message being replied to (optional, empty = no reply).
+  string reply_to_id = 3;
+  // Pre-uploaded attachment IDs to associate with this message (optional).
+  repeated string attachment_ids = 4;
+}
+
+// EditMessageRequest edits an existing message.
+message EditMessageRequest {
+  string conversation_id = 1 [(buf.validate.field).string.uuid = true];
+  string message_id = 2 [(buf.validate.field).string.uuid = true];
+  string body = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 10000
+  }];
+}
+
+// DeleteMessageRequest soft-deletes a message.
+message DeleteMessageRequest {
+  string conversation_id = 1 [(buf.validate.field).string.uuid = true];
+  string message_id = 2 [(buf.validate.field).string.uuid = true];
+}
+
+// ListMessagesRequest lists messages in a conversation with cursor-based pagination.
+message ListMessagesRequest {
+  string conversation_id = 1 [(buf.validate.field).string.uuid = true];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Opaque base64 cursor; empty = start from latest messages.
+  string before_cursor = 3;
+}
+
+// StreamChatEventsRequest opens a server-streaming connection for chat events.
+message StreamChatEventsRequest {
+  // Last event ID seen by the client; used to resume the stream after reconnect.
+  string last_event_id = 1;
+}
+
+// MarkConversationReadRequest marks a conversation as read.
+message MarkConversationReadRequest {
+  string conversation_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// ClearConversationHistoryRequest clears the calling user's message history for a conversation.
+message ClearConversationHistoryRequest {
+  string conversation_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// SetTypingRequest sets the typing indicator for the current user.
+message SetTypingRequest {
+  string conversation_id = 1 [(buf.validate.field).string.uuid = true];
+  bool is_typing = 2;
+}
+
+// GetMessageEditHistoryRequest retrieves the edit history for a message.
+message GetMessageEditHistoryRequest {
+  string conversation_id = 1 [(buf.validate.field).string.uuid = true];
+  string message_id = 2 [(buf.validate.field).string.uuid = true];
+}
+
+// UploadChatAttachmentRequest uploads a single file to a conversation.
+message UploadChatAttachmentRequest {
+  string conversation_id = 1 [(buf.validate.field).string.uuid = true];
+  string file_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 255
+  }];
+  string content_type = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Raw file bytes (max 25MB).
+  bytes file_data = 4 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 26214400
+  }];
+}
+
+// HeartbeatRequest sends a heartbeat to update online presence.
+message HeartbeatRequest {}
+
+// GetOnlineUsersRequest retrieves online user IDs.
+message GetOnlineUsersRequest {
+  repeated string user_ids = 1;
+}
+
+// =============================================================================
+// RESPONSE MESSAGES
+// =============================================================================
+
+// CreateDirectConversationResponse returns the created direct conversation.
+message CreateDirectConversationResponse {
+  common.v1.BaseResponse base = 1;
+  ConversationProto data = 2;
+}
+
+// CreateGroupConversationResponse returns the created group conversation.
+message CreateGroupConversationResponse {
+  common.v1.BaseResponse base = 1;
+  ConversationProto data = 2;
+}
+
+// GetConversationResponse returns a single conversation.
+message GetConversationResponse {
+  common.v1.BaseResponse base = 1;
+  ConversationProto data = 2;
+}
+
+// ListConversationsResponse returns a paginated list of conversations.
+message ListConversationsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated ConversationProto data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// UpdateGroupConversationResponse returns the updated group conversation.
+message UpdateGroupConversationResponse {
+  common.v1.BaseResponse base = 1;
+  ConversationProto data = 2;
+}
+
+// AddParticipantsResponse confirms participants were added.
+message AddParticipantsResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+// RemoveParticipantResponse confirms a participant was removed.
+message RemoveParticipantResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+// LeaveConversationResponse confirms the user left the conversation.
+message LeaveConversationResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+// SendMessageResponse returns the sent message.
+message SendMessageResponse {
+  common.v1.BaseResponse base = 1;
+  MessageProto data = 2;
+}
+
+// EditMessageResponse returns the edited message.
+message EditMessageResponse {
+  common.v1.BaseResponse base = 1;
+  MessageProto data = 2;
+}
+
+// DeleteMessageResponse confirms a message was deleted.
+message DeleteMessageResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+// ListMessagesResponse returns a cursor-paginated list of messages.
+message ListMessagesResponse {
+  common.v1.BaseResponse base = 1;
+  repeated MessageProto data = 2;
+  string next_cursor = 3;
+  bool has_more = 4;
+}
+
+// MarkConversationReadResponse confirms the conversation was marked as read.
+message MarkConversationReadResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+// ClearConversationHistoryResponse confirms the caller's history was cleared.
+message ClearConversationHistoryResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+// SetTypingResponse confirms the typing indicator was set.
+message SetTypingResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+// GetMessageEditHistoryResponse returns the edit history for a message.
+message GetMessageEditHistoryResponse {
+  common.v1.BaseResponse base = 1;
+  repeated EditHistoryEntryProto data = 2;
+}
+
+// UploadChatAttachmentResponse returns the uploaded attachment metadata.
+message UploadChatAttachmentResponse {
+  common.v1.BaseResponse base = 1;
+  AttachmentProto data = 2;
+}
+
+// HeartbeatResponse confirms the heartbeat was received.
+message HeartbeatResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+// GetOnlineUsersResponse returns the list of online user IDs.
+message GetOnlineUsersResponse {
+  common.v1.BaseResponse base = 1;
+  repeated string user_ids = 2;
+}
+
+// =============================================================================
+// STREAMING EVENT MESSAGES
+// =============================================================================
+
+// StreamChatEventsResponse wraps a real-time chat event delivered via server streaming.
+message StreamChatEventsResponse {
+  string event_id = 1;
+  oneof payload {
+    MessageEvent message_received = 2;
+    MessageEvent message_edited = 3;
+    DeleteEvent message_deleted = 4;
+    TypingEvent typing = 5;
+    ReadEvent read_receipt = 6;
+    PresenceEvent presence = 7;
+  }
+}
+
+// MessageEvent represents a new or edited message event.
+message MessageEvent {
+  string conversation_id = 1;
+  MessageProto message = 2;
+}
+
+// DeleteEvent represents a message deletion event.
+message DeleteEvent {
+  string conversation_id = 1;
+  string message_id = 2;
+}
+
+// TypingEvent represents a typing indicator event.
+message TypingEvent {
+  string conversation_id = 1;
+  string user_id = 2;
+  string user_name = 3;
+  bool is_typing = 4;
+}
+
+// ReadEvent represents a read receipt event.
+message ReadEvent {
+  string conversation_id = 1;
+  string message_id = 2;
+  string user_id = 3;
+  string read_at = 4;
+}
+
+// PresenceEvent represents a user online/offline status change.
+message PresenceEvent {
+  string user_id = 1;
+  bool is_online = 2;
+}
