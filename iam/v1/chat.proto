@@ -108,6 +108,12 @@ service ChatService {
     };
   }
 
+  // ClearConversationHistory clears the calling user's own view of a conversation's
+  // message history. Messages remain visible to other participants.
+  rpc ClearConversationHistory(ClearConversationHistoryRequest) returns (ClearConversationHistoryResponse) {
+    option (google.api.http) = {delete: "/api/v1/iam/chat/conversations/{conversation_id}/history"};
+  }
+
   // SetTyping sets the typing indicator for the current user in a conversation.
   rpc SetTyping(SetTypingRequest) returns (SetTypingResponse) {
     option (google.api.http) = {
@@ -119,6 +125,15 @@ service ChatService {
   // GetMessageEditHistory returns the edit history for a specific message.
   rpc GetMessageEditHistory(GetMessageEditHistoryRequest) returns (GetMessageEditHistoryResponse) {
     option (google.api.http) = {get: "/api/v1/iam/chat/conversations/{conversation_id}/messages/{message_id}/history"};
+  }
+
+  // UploadChatAttachment uploads a file to a conversation and returns its
+  // attachment metadata. The returned attachment_id is passed to SendMessage.
+  rpc UploadChatAttachment(UploadChatAttachmentRequest) returns (UploadChatAttachmentResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/iam/chat/conversations/{conversation_id}/attachments"
+      body: "*"
+    };
   }
 }
 
@@ -179,6 +194,17 @@ message MessageProto {
   repeated ReadReceiptProto read_receipts = 9;
   string created_at = 10;
   string updated_at = 11;
+  repeated AttachmentProto attachments = 12;
+}
+
+// AttachmentProto represents a file or image attached to a chat message.
+message AttachmentProto {
+  string attachment_id = 1;
+  string file_name = 2;
+  string file_url = 3;
+  string content_type = 4;
+  int64 file_size = 5;
+  string thumbnail_url = 6;
 }
 
 // ReadReceiptProto represents a read receipt for a message.
@@ -261,6 +287,8 @@ message SendMessageRequest {
   }];
   // ID of the message being replied to (optional, empty = no reply).
   string reply_to_id = 3;
+  // Pre-uploaded attachment IDs to associate with this message (optional).
+  repeated string attachment_ids = 4;
 }
 
 // EditMessageRequest edits an existing message.
@@ -301,6 +329,11 @@ message MarkConversationReadRequest {
   string conversation_id = 1 [(buf.validate.field).string.uuid = true];
 }
 
+// ClearConversationHistoryRequest clears the calling user's message history for a conversation.
+message ClearConversationHistoryRequest {
+  string conversation_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
 // SetTypingRequest sets the typing indicator for the current user.
 message SetTypingRequest {
   string conversation_id = 1 [(buf.validate.field).string.uuid = true];
@@ -311,6 +344,24 @@ message SetTypingRequest {
 message GetMessageEditHistoryRequest {
   string conversation_id = 1 [(buf.validate.field).string.uuid = true];
   string message_id = 2 [(buf.validate.field).string.uuid = true];
+}
+
+// UploadChatAttachmentRequest uploads a single file to a conversation.
+message UploadChatAttachmentRequest {
+  string conversation_id = 1 [(buf.validate.field).string.uuid = true];
+  string file_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 255
+  }];
+  string content_type = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Raw file bytes (max 25MB).
+  bytes file_data = 4 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 26214400
+  }];
 }
 
 // HeartbeatRequest sends a heartbeat to update online presence.
@@ -401,6 +452,11 @@ message MarkConversationReadResponse {
   common.v1.BaseResponse base = 1;
 }
 
+// ClearConversationHistoryResponse confirms the caller's history was cleared.
+message ClearConversationHistoryResponse {
+  common.v1.BaseResponse base = 1;
+}
+
 // SetTypingResponse confirms the typing indicator was set.
 message SetTypingResponse {
   common.v1.BaseResponse base = 1;
@@ -410,6 +466,12 @@ message SetTypingResponse {
 message GetMessageEditHistoryResponse {
   common.v1.BaseResponse base = 1;
   repeated EditHistoryEntryProto data = 2;
+}
+
+// UploadChatAttachmentResponse returns the uploaded attachment metadata.
+message UploadChatAttachmentResponse {
+  common.v1.BaseResponse base = 1;
+  AttachmentProto data = 2;
 }
 
 // HeartbeatResponse confirms the heartbeat was received.
