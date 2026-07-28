@@ -1,0 +1,1166 @@
+syntax = "proto3";
+
+package ppc.v1;
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "ppc/v1/common.proto";
+
+// =============================================================================
+// PPC master data (Phase 1).
+// Decimals are transported as strings (decimal-as-string). Finance masters
+// (CPM / route / grade) are referenced by *_sys_id soft references — no FK.
+// Machine is sync-sourced from finance mst_machine + Oracle TXTMACH; PPC-only
+// fields (area/group/doff) are locally editable and preserved across syncs.
+// =============================================================================
+
+// ── MachineGroup ─────────────────────────────────────────────────────────────
+
+// MachineGroup groups machines within a production area.
+message MachineGroup {
+  int64 group_id = 1;
+  string group_name = 2;
+  AreaCode group_area = 3;
+  common.v1.AuditInfo audit = 16;
+}
+
+message CreateMachineGroupRequest {
+  string group_name = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 50
+  }];
+  AreaCode group_area = 2 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+}
+
+message CreateMachineGroupResponse {
+  common.v1.BaseResponse base = 1;
+  MachineGroup data = 2;
+}
+
+message GetMachineGroupRequest {
+  int64 group_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetMachineGroupResponse {
+  common.v1.BaseResponse base = 1;
+  MachineGroup data = 2;
+}
+
+message UpdateMachineGroupRequest {
+  int64 group_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional string group_name = 2 [(buf.validate.field).string.max_len = 50];
+  optional AreaCode group_area = 3 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+}
+
+message UpdateMachineGroupResponse {
+  common.v1.BaseResponse base = 1;
+  MachineGroup data = 2;
+}
+
+message DeleteMachineGroupRequest {
+  int64 group_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeleteMachineGroupResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+message ListMachineGroupsRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  AreaCode area = 4; // UNSPECIFIED = no filter.
+  string sort_by = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "group_name",
+      "group_area",
+      "created_at"
+    ]
+  }];
+  string sort_order = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+message ListMachineGroupsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated MachineGroup data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ── Machine (sync-sourced) ───────────────────────────────────────────────────
+
+// Machine is the PPC machine master. Rows originate from finance mst_machine +
+// Oracle TXTMACH via the sync worker; PPC-only fields are locally editable.
+message Machine {
+  int64 machine_id = 1;
+  string machine_no = 2; // unique, from Oracle TXTMACH.MACH_NO
+  AreaCode machine_area = 3; // TXT / SPG / TWT
+  string machine_line = 4;
+  int64 machine_group_id = 5;
+  string machine_group_name = 6; // denormalized for UI
+  string machine_doff_weight_kg = 7; // decimal-as-string
+  bool machine_is_active = 8;
+  string machine_orion_code = 9;
+  string source_mc_id = 10; // finance mst_machine.mc_id (UUID); empty if unmatched
+  string synced_at = 11; // ISO-8601; last sync timestamp
+  common.v1.AuditInfo audit = 16;
+}
+
+// Create is used for the rare hand-added machine; normal flow is SyncMachines.
+message CreateMachineRequest {
+  string machine_no = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 10
+  }];
+  AreaCode machine_area = 2 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  string machine_line = 3 [(buf.validate.field).string.max_len = 20];
+  optional int64 machine_group_id = 4 [(buf.validate.field).int64.gt = 0];
+  string machine_doff_weight_kg = 5 [(buf.validate.field).string.max_len = 20];
+  string machine_orion_code = 6 [(buf.validate.field).string.max_len = 30];
+}
+
+message CreateMachineResponse {
+  common.v1.BaseResponse base = 1;
+  Machine data = 2;
+}
+
+message GetMachineRequest {
+  int64 machine_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetMachineResponse {
+  common.v1.BaseResponse base = 1;
+  Machine data = 2;
+}
+
+// Update edits PPC-only fields; these are preserved across machine syncs.
+message UpdateMachineRequest {
+  int64 machine_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional AreaCode machine_area = 2 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  optional string machine_line = 3 [(buf.validate.field).string.max_len = 20];
+  optional int64 machine_group_id = 4 [(buf.validate.field).int64.gt = 0];
+  optional string machine_doff_weight_kg = 5 [(buf.validate.field).string.max_len = 20];
+  optional bool machine_is_active = 6;
+  optional string machine_orion_code = 7 [(buf.validate.field).string.max_len = 30];
+}
+
+message UpdateMachineResponse {
+  common.v1.BaseResponse base = 1;
+  Machine data = 2;
+}
+
+message ListMachinesRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  AreaCode area = 4; // UNSPECIFIED = no filter.
+  optional int64 machine_group_id = 5;
+  ActiveFilter active_filter = 6;
+  string sort_by = 7 [(buf.validate.field).string = {
+    in: [
+      "",
+      "machine_no",
+      "machine_area",
+      "machine_line",
+      "synced_at",
+      "created_at"
+    ]
+  }];
+  string sort_order = 8 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+message ListMachinesResponse {
+  common.v1.BaseResponse base = 1;
+  repeated Machine data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// SyncMachines triggers an on-demand upsert from finance + Oracle sources.
+message SyncMachinesRequest {}
+
+message SyncMachinesResponse {
+  common.v1.BaseResponse base = 1;
+  int32 inserted_count = 2;
+  int32 updated_count = 3;
+  int32 skipped_count = 4;
+}
+
+// ── LotMaster ────────────────────────────────────────────────────────────────
+
+// LotSpec is the yarn and packing specification a lot carries, imported from
+// the legacy Oracle lot master ASPAK.MMSMERGE. Every field is optional: a
+// PPC-minted lot has none of it, and even an imported row leaves most empty.
+//
+// Provenance (source / source_key / synced_at) lives on LotMaster, not here,
+// mirroring both the Customer message and the lot domain aggregate, where
+// source is an entity field and Spec carries no provenance.
+message LotSpec {
+  string prod_type = 1; // MERGE_PROD_TYPE: PTY / POY / FOY
+  string yarn_type = 2; // YARN_TYPE; overlaps prod_type but is not identical
+  string denier = 3; // MERGE_DENIER; VARCHAR2 in the source, kept as text
+  optional int32 filament = 4; // MERGE_FILAMENT
+  string cross_section = 5; // MERGE_CROSS_SEC: RND / TBL
+  string qc_grade = 6; // MERGE_QC_GRADE: AX, Aa, ...
+  string description = 7; // MERGE_DESCR, the legacy spec shorthand
+  string shade_color = 8; // SHADE_COLOR, falling back to MERGE_COLOR / YARN_COLOR
+  string tare_box_weight = 9; // decimal-as-string; MERGE_TARE_BOX_WT, kg
+  string tare_bobbin_weight = 10; // decimal-as-string; MERGE_TARE_BOBIN_WT, kg
+  optional int32 bobbins_per_box = 11; // NVL(MERGE_NOBOB, MERGE_BOX)
+  // decimal-as-string; MERGE_BOB verbatim, provisionally kg of yarn per bobbin.
+  // UNCONFIRMED — it seeds std_weight_full on first import only.
+  string source_bob_weight = 12;
+  string orion_item_code = 13; // MERGE_ITEM_ORION
+  string machine_no = 14; // MERGE_MACHINE
+  optional int32 efficiency_pct = 15; // MERGE_EFF
+  // 16 is left free: every other message in this file reserves it for
+  // common.v1.AuditInfo, and keeping the slot clear avoids a surprise if LotSpec
+  // is ever promoted to a row of its own.
+  string source_status = 17; // MERGE_STATUS verbatim
+  string source_pak_status = 18; // MERGE_PAK_STATUS verbatim ('B' excluded by packing)
+}
+
+// LotMaster holds per-lot standard bobbin weights (full / unfull) used by the
+// TXT quantity calculation. Lot key = item_code + shade_code.
+message LotMaster {
+  string lot_no = 1; // PK
+  string item_code = 2;
+  string shade_code = 3;
+  string std_weight_full = 4; // decimal-as-string (TXT TRN_STS=0)
+  string std_weight_unfull = 5; // decimal-as-string (TXT TRN_STS=1)
+  string notes = 6;
+  LotSpec spec = 7; // source-owned yarn / packing specification
+  string source = 8; // PPC / MMSMERGE; chk_lot_master_source
+  string source_key = 9; // MMSMERGE.MERGE_CODE verbatim; empty for PPC lots
+  string synced_at = 10; // ISO-8601; last successful sync, empty for PPC lots
+  common.v1.AuditInfo audit = 16;
+}
+
+message CreateLotMasterRequest {
+  string lot_no = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 30
+  }];
+  string item_code = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 30
+  }];
+  string shade_code = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  string std_weight_full = 4 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  string std_weight_unfull = 5 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  string notes = 6 [(buf.validate.field).string.max_len = 500];
+}
+
+message CreateLotMasterResponse {
+  common.v1.BaseResponse base = 1;
+  LotMaster data = 2;
+}
+
+message GetLotMasterRequest {
+  string lot_no = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 30
+  }];
+}
+
+message GetLotMasterResponse {
+  common.v1.BaseResponse base = 1;
+  LotMaster data = 2;
+}
+
+message UpdateLotMasterRequest {
+  string lot_no = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 30
+  }];
+  optional string item_code = 2 [(buf.validate.field).string.max_len = 30];
+  optional string shade_code = 3 [(buf.validate.field).string.max_len = 20];
+  optional string std_weight_full = 4 [(buf.validate.field).string.max_len = 20];
+  optional string std_weight_unfull = 5 [(buf.validate.field).string.max_len = 20];
+  optional string notes = 6 [(buf.validate.field).string.max_len = 500];
+  // spec, when set, replaces the yarn/packing specification wholesale. Omitting
+  // it leaves the stored spec untouched, so a planner correcting only the
+  // standard weights does not have to round-trip seventeen fields.
+  //
+  // Editing a sync-sourced lot is deliberately allowed: the sync merges with
+  // COALESCE, so a PPC correction survives the next run.
+  optional LotSpec spec = 7;
+}
+
+message UpdateLotMasterResponse {
+  common.v1.BaseResponse base = 1;
+  LotMaster data = 2;
+}
+
+message DeleteLotMasterRequest {
+  string lot_no = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 30
+  }];
+}
+
+message DeleteLotMasterResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+message ListLotMastersRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  string item_code = 4 [(buf.validate.field).string.max_len = 30];
+  string shade_code = 5 [(buf.validate.field).string.max_len = 20];
+  string sort_by = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "lot_no",
+      "item_code",
+      "shade_code",
+      "source",
+      "prod_type",
+      "synced_at",
+      "created_at"
+    ]
+  }];
+  string sort_order = 7 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+  // source filters on provenance; empty means all.
+  string source = 8 [(buf.validate.field).string = {
+    in: [
+      "",
+      "PPC",
+      "MMSMERGE"
+    ]
+  }];
+  // prod_type filters on the MMSMERGE product type; empty means all.
+  string prod_type = 9 [(buf.validate.field).string.max_len = 15];
+}
+
+message ListLotMastersResponse {
+  common.v1.BaseResponse base = 1;
+  repeated LotMaster data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// SyncLots triggers an on-demand read-only import from the legacy Oracle lot
+// master ASPAK.MMSMERGE. The merge preserves PPC-local corrections.
+message SyncLotsRequest {}
+
+message SyncLotsResponse {
+  common.v1.BaseResponse base = 1;
+  int32 inserted = 2;
+  int32 updated = 3;
+  int32 skipped = 4;
+  bool oracle_used = 5; // False when Oracle was unconfigured (no-op run).
+}
+
+// ── ProductPPCConfig ─────────────────────────────────────────────────────────
+
+// ProductPPCConfig extends a finance CPM product with PPC planning attributes.
+// denier is the R4 stopgap override for theoretical efficiency (Gap G-005:
+// CPM has no denier field).
+message ProductPPCConfig {
+  int64 config_id = 1;
+  int64 cpm_product_sys_id = 2; // soft ref to finance cost_product_master
+  string product_code = 3; // denormalized for UI
+  string product_name = 4; // denormalized for UI
+  bool is_commodity_watch = 5;
+  string price_sell = 6; // decimal-as-string
+  int64 machine_group_id = 7;
+  string yield_std = 8; // decimal-as-string
+  string buffer_rm_pct = 9; // decimal-as-string
+  string ax_yield_pct = 10; // decimal-as-string, historical %AX (0.75-0.84)
+  string denier = 11; // decimal-as-string; may be empty (Gap G-005 stopgap)
+  common.v1.AuditInfo audit = 16;
+}
+
+message CreateProductPPCConfigRequest {
+  int64 cpm_product_sys_id = 1 [(buf.validate.field).int64.gt = 0];
+  bool is_commodity_watch = 2;
+  string price_sell = 3 [(buf.validate.field).string.max_len = 20];
+  optional int64 machine_group_id = 4 [(buf.validate.field).int64.gt = 0];
+  string yield_std = 5 [(buf.validate.field).string.max_len = 20];
+  string buffer_rm_pct = 6 [(buf.validate.field).string.max_len = 20];
+  string ax_yield_pct = 7 [(buf.validate.field).string.max_len = 20];
+  string denier = 8 [(buf.validate.field).string.max_len = 20];
+}
+
+message CreateProductPPCConfigResponse {
+  common.v1.BaseResponse base = 1;
+  ProductPPCConfig data = 2;
+}
+
+message GetProductPPCConfigRequest {
+  int64 config_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetProductPPCConfigResponse {
+  common.v1.BaseResponse base = 1;
+  ProductPPCConfig data = 2;
+}
+
+message UpdateProductPPCConfigRequest {
+  int64 config_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional bool is_commodity_watch = 2;
+  optional string price_sell = 3 [(buf.validate.field).string.max_len = 20];
+  optional int64 machine_group_id = 4 [(buf.validate.field).int64.gt = 0];
+  optional string yield_std = 5 [(buf.validate.field).string.max_len = 20];
+  optional string buffer_rm_pct = 6 [(buf.validate.field).string.max_len = 20];
+  optional string ax_yield_pct = 7 [(buf.validate.field).string.max_len = 20];
+  optional string denier = 8 [(buf.validate.field).string.max_len = 20];
+}
+
+message UpdateProductPPCConfigResponse {
+  common.v1.BaseResponse base = 1;
+  ProductPPCConfig data = 2;
+}
+
+message DeleteProductPPCConfigRequest {
+  int64 config_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeleteProductPPCConfigResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+message ListProductPPCConfigsRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  optional bool commodity_watch_only = 4;
+  string sort_by = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "product_code",
+      "product_name",
+      "created_at"
+    ]
+  }];
+  string sort_order = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+message ListProductPPCConfigsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated ProductPPCConfig data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ── ProductMachineCapacity ───────────────────────────────────────────────────
+
+// ProductMachineCapacity is the per-product per-machine capacity profile.
+// v1.2: planning-math only (no-of-machine-needed). Setup values that vary per
+// machine (speed / positions / draw-ratio) moved to ProductMachineParameter.
+message ProductMachineCapacity {
+  int64 capacity_id = 1;
+  int64 cpm_product_sys_id = 2; // soft ref
+  int64 machine_id = 3;
+  string machine_no = 4; // denormalized for UI
+  string prod_per_day = 5; // decimal-as-string, planning capacity
+  string efficiency_pct = 6; // decimal-as-string, planning target (not actual)
+  common.v1.AuditInfo audit = 16;
+}
+
+message CreateProductMachineCapacityRequest {
+  int64 cpm_product_sys_id = 1 [(buf.validate.field).int64.gt = 0];
+  int64 machine_id = 2 [(buf.validate.field).int64.gt = 0];
+  string prod_per_day = 3 [(buf.validate.field).string.max_len = 20];
+  string efficiency_pct = 4 [(buf.validate.field).string.max_len = 20];
+}
+
+message CreateProductMachineCapacityResponse {
+  common.v1.BaseResponse base = 1;
+  ProductMachineCapacity data = 2;
+}
+
+message GetProductMachineCapacityRequest {
+  int64 capacity_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetProductMachineCapacityResponse {
+  common.v1.BaseResponse base = 1;
+  ProductMachineCapacity data = 2;
+}
+
+message UpdateProductMachineCapacityRequest {
+  int64 capacity_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional string prod_per_day = 2 [(buf.validate.field).string.max_len = 20];
+  optional string efficiency_pct = 3 [(buf.validate.field).string.max_len = 20];
+}
+
+message UpdateProductMachineCapacityResponse {
+  common.v1.BaseResponse base = 1;
+  ProductMachineCapacity data = 2;
+}
+
+message DeleteProductMachineCapacityRequest {
+  int64 capacity_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeleteProductMachineCapacityResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+message ListProductMachineCapacitiesRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  optional int64 cpm_product_sys_id = 3;
+  optional int64 machine_id = 4;
+  string sort_by = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "machine_no",
+      "prod_per_day",
+      "created_at"
+    ]
+  }];
+  string sort_order = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+message ListProductMachineCapacitiesResponse {
+  common.v1.BaseResponse base = 1;
+  repeated ProductMachineCapacity data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ── ProductMachineParameter ──────────────────────────────────────────────────
+
+// ProductMachineParameter is the per-PRODUCT+MACHINE parameter value layer
+// (v1.2, Opt A). cost_product_parameter is per-product only; values that vary
+// per machine (speed, positions, draw-ratio) live here, referencing the same
+// mst_parameter definition (one definition, two grains). WO resolution chain:
+// WO-ref -> this layer -> cost_product_parameter -> mst_parameter.default.
+message ProductMachineParameter {
+  int64 pmp_id = 1;
+  int64 cpm_product_sys_id = 2; // soft ref (finance)
+  int64 machine_id = 3;
+  string machine_no = 4; // denormalized for UI
+  string param_id = 5; // UUID, FK mst_parameter (Costing)
+  string param_code = 6; // denormalized for UI
+  string param_name = 7; // denormalized for UI
+  string data_type = 8; // NUMBER / TEXT / BOOLEAN
+  string value_num = 9; // decimal-as-string
+  string value_text = 10;
+  bool value_flag = 11;
+  common.v1.AuditInfo audit = 16;
+}
+
+message CreateProductMachineParameterRequest {
+  int64 cpm_product_sys_id = 1 [(buf.validate.field).int64.gt = 0];
+  int64 machine_id = 2 [(buf.validate.field).int64.gt = 0];
+  string param_id = 3 [(buf.validate.field).string.uuid = true];
+  string value_num = 4 [(buf.validate.field).string.max_len = 40]; // decimal-as-string
+  string value_text = 5 [(buf.validate.field).string.max_len = 500];
+  bool value_flag = 6;
+  bool has_value_flag = 7;
+}
+
+message CreateProductMachineParameterResponse {
+  common.v1.BaseResponse base = 1;
+  ProductMachineParameter data = 2;
+}
+
+message GetProductMachineParameterRequest {
+  int64 pmp_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetProductMachineParameterResponse {
+  common.v1.BaseResponse base = 1;
+  ProductMachineParameter data = 2;
+}
+
+message UpdateProductMachineParameterRequest {
+  int64 pmp_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional string value_num = 2 [(buf.validate.field).string.max_len = 40];
+  optional string value_text = 3 [(buf.validate.field).string.max_len = 500];
+  optional bool value_flag = 4;
+}
+
+message UpdateProductMachineParameterResponse {
+  common.v1.BaseResponse base = 1;
+  ProductMachineParameter data = 2;
+}
+
+message DeleteProductMachineParameterRequest {
+  int64 pmp_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeleteProductMachineParameterResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+message ListProductMachineParametersRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 200
+  }];
+  optional int64 cpm_product_sys_id = 3;
+  optional int64 machine_id = 4;
+  string param_id = 5 [(buf.validate.field).string.max_len = 36];
+  string sort_by = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "machine_no",
+      "param_code",
+      "created_at"
+    ]
+  }];
+  string sort_order = 7 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+message ListProductMachineParametersResponse {
+  common.v1.BaseResponse base = 1;
+  repeated ProductMachineParameter data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ── OverrunThresholdConfig ───────────────────────────────────────────────────
+
+// OverrunThresholdConfig is a 5-level over-production threshold. Resolution is
+// most-specific-wins: WO -> PRODUCT -> PRODUCT_TYPE -> MACHINE_GROUP -> SYSTEM.
+message OverrunThresholdConfig {
+  int64 threshold_id = 1;
+  ThresholdLevel level = 2;
+  int64 ref_id = 3; // scoped id per level (0 for SYSTEM)
+  ThresholdUnit threshold_unit = 4;
+  string warning_value = 5; // decimal-as-string
+  string block_value = 6; // decimal-as-string
+  string notes = 7;
+  bool is_active = 8;
+  common.v1.AuditInfo audit = 16;
+}
+
+message CreateOverrunThresholdConfigRequest {
+  ThresholdLevel level = 1 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  optional int64 ref_id = 2 [(buf.validate.field).int64.gt = 0];
+  ThresholdUnit threshold_unit = 3 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  string warning_value = 4 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  string block_value = 5 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  string notes = 6 [(buf.validate.field).string.max_len = 500];
+}
+
+message CreateOverrunThresholdConfigResponse {
+  common.v1.BaseResponse base = 1;
+  OverrunThresholdConfig data = 2;
+}
+
+message GetOverrunThresholdConfigRequest {
+  int64 threshold_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetOverrunThresholdConfigResponse {
+  common.v1.BaseResponse base = 1;
+  OverrunThresholdConfig data = 2;
+}
+
+message UpdateOverrunThresholdConfigRequest {
+  int64 threshold_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional ThresholdUnit threshold_unit = 2 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  optional string warning_value = 3 [(buf.validate.field).string.max_len = 20];
+  optional string block_value = 4 [(buf.validate.field).string.max_len = 20];
+  optional string notes = 5 [(buf.validate.field).string.max_len = 500];
+  optional bool is_active = 6;
+}
+
+message UpdateOverrunThresholdConfigResponse {
+  common.v1.BaseResponse base = 1;
+  OverrunThresholdConfig data = 2;
+}
+
+message DeleteOverrunThresholdConfigRequest {
+  int64 threshold_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeleteOverrunThresholdConfigResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+message ListOverrunThresholdConfigsRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  ThresholdLevel level = 3; // UNSPECIFIED = no filter.
+  ActiveFilter active_filter = 4;
+  string sort_by = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "level",
+      "created_at"
+    ]
+  }];
+  string sort_order = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+message ListOverrunThresholdConfigsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated OverrunThresholdConfig data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ── DowntimeReasonMaster ─────────────────────────────────────────────────────
+
+// DowntimeReasonMaster is a per-area configurable downtime/idle reason code.
+message DowntimeReasonMaster {
+  int64 reason_id = 1;
+  AreaCode area = 2;
+  string code = 3;
+  string name = 4;
+  string category = 5; // IDLE_POSITION / MACHINE_DOWN / PRODUCTION_LOSS
+  bool is_exclude_from_eff = 6;
+  bool is_active = 7;
+  int32 sort_order = 8;
+  common.v1.AuditInfo audit = 16;
+}
+
+message CreateDowntimeReasonMasterRequest {
+  AreaCode area = 1 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  string code = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  string name = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  string category = 4 [(buf.validate.field).string = {
+    in: [
+      "IDLE_POSITION",
+      "MACHINE_DOWN",
+      "PRODUCTION_LOSS"
+    ]
+  }];
+  bool is_exclude_from_eff = 5;
+  int32 sort_order = 6 [(buf.validate.field).int32.gte = 0];
+}
+
+message CreateDowntimeReasonMasterResponse {
+  common.v1.BaseResponse base = 1;
+  DowntimeReasonMaster data = 2;
+}
+
+message GetDowntimeReasonMasterRequest {
+  int64 reason_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetDowntimeReasonMasterResponse {
+  common.v1.BaseResponse base = 1;
+  DowntimeReasonMaster data = 2;
+}
+
+message UpdateDowntimeReasonMasterRequest {
+  int64 reason_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional string name = 2 [(buf.validate.field).string.max_len = 100];
+  optional string category = 3 [(buf.validate.field).string = {
+    in: [
+      "",
+      "IDLE_POSITION",
+      "MACHINE_DOWN",
+      "PRODUCTION_LOSS"
+    ]
+  }];
+  optional bool is_exclude_from_eff = 4;
+  optional bool is_active = 5;
+  optional int32 sort_order = 6 [(buf.validate.field).int32.gte = 0];
+}
+
+message UpdateDowntimeReasonMasterResponse {
+  common.v1.BaseResponse base = 1;
+  DowntimeReasonMaster data = 2;
+}
+
+message DeleteDowntimeReasonMasterRequest {
+  int64 reason_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeleteDowntimeReasonMasterResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+message ListDowntimeReasonMastersRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  AreaCode area = 4; // UNSPECIFIED = no filter.
+  ActiveFilter active_filter = 5;
+  string sort_by = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "code",
+      "name",
+      "sort_order",
+      "created_at"
+    ]
+  }];
+  string sort_order = 7 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+message ListDowntimeReasonMastersResponse {
+  common.v1.BaseResponse base = 1;
+  repeated DowntimeReasonMaster data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ── WasteCategoryMaster ──────────────────────────────────────────────────────
+
+// WasteCategoryMaster is a per-area configurable waste / downgrade category.
+message WasteCategoryMaster {
+  int64 category_id = 1;
+  AreaCode area = 2;
+  string type = 3; // WASTE / DOWNGRADE
+  string code = 4;
+  string name = 5;
+  string grade_target = 6; // for DOWNGRADE: B / C
+  bool is_active = 7;
+  int32 sort_order = 8;
+  common.v1.AuditInfo audit = 16;
+}
+
+message CreateWasteCategoryMasterRequest {
+  AreaCode area = 1 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  string type = 2 [(buf.validate.field).string = {
+    in: [
+      "WASTE",
+      "DOWNGRADE"
+    ]
+  }];
+  string code = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 30
+  }];
+  string name = 4 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  string grade_target = 5 [(buf.validate.field).string.max_len = 5];
+  int32 sort_order = 6 [(buf.validate.field).int32.gte = 0];
+}
+
+message CreateWasteCategoryMasterResponse {
+  common.v1.BaseResponse base = 1;
+  WasteCategoryMaster data = 2;
+}
+
+message GetWasteCategoryMasterRequest {
+  int64 category_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetWasteCategoryMasterResponse {
+  common.v1.BaseResponse base = 1;
+  WasteCategoryMaster data = 2;
+}
+
+message UpdateWasteCategoryMasterRequest {
+  int64 category_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional string name = 2 [(buf.validate.field).string.max_len = 100];
+  optional string grade_target = 3 [(buf.validate.field).string.max_len = 5];
+  optional bool is_active = 4;
+  optional int32 sort_order = 5 [(buf.validate.field).int32.gte = 0];
+}
+
+message UpdateWasteCategoryMasterResponse {
+  common.v1.BaseResponse base = 1;
+  WasteCategoryMaster data = 2;
+}
+
+message DeleteWasteCategoryMasterRequest {
+  int64 category_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeleteWasteCategoryMasterResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+message ListWasteCategoryMastersRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  AreaCode area = 4; // UNSPECIFIED = no filter.
+  string type = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "WASTE",
+      "DOWNGRADE"
+    ]
+  }];
+  ActiveFilter active_filter = 6;
+  string sort_by = 7 [(buf.validate.field).string = {
+    in: [
+      "",
+      "code",
+      "name",
+      "sort_order",
+      "created_at"
+    ]
+  }];
+  string sort_order = 8 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+message ListWasteCategoryMastersResponse {
+  common.v1.BaseResponse base = 1;
+  repeated WasteCategoryMaster data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ── PpcLookup (display metadata) ─────────────────────────────────────────────
+
+// PpcLookup is a lightweight, PPC-owned display-metadata row. It supplies the
+// frontend with admin-configurable dropdown labels/order/active-state WITHOUT
+// making business enums dynamic. Backend business logic keeps validating against
+// Go enum constants; a code here MUST equal the enum string value it labels.
+message PpcLookup {
+  int64 lookup_id = 1;
+  string category = 2; // e.g. PPC_AREA, PPC_DEMAND_TYPE
+  string code = 3; // equals the enum string value (e.g. AX_ONLY)
+  string label = 4; // human-friendly (e.g. "AX Only")
+  int32 sort_order = 5;
+  bool is_active = 6;
+  common.v1.AuditInfo audit = 16;
+}
+
+message CreatePpcLookupRequest {
+  string category = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 40
+  }];
+  string code = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 40
+  }];
+  string label = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 120
+  }];
+  int32 sort_order = 4 [(buf.validate.field).int32.gte = 0];
+}
+
+message CreatePpcLookupResponse {
+  common.v1.BaseResponse base = 1;
+  PpcLookup data = 2;
+}
+
+message GetPpcLookupRequest {
+  int64 lookup_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetPpcLookupResponse {
+  common.v1.BaseResponse base = 1;
+  PpcLookup data = 2;
+}
+
+message UpdatePpcLookupRequest {
+  int64 lookup_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional string label = 2 [(buf.validate.field).string.max_len = 120];
+  optional int32 sort_order = 3 [(buf.validate.field).int32.gte = 0];
+  optional bool is_active = 4;
+}
+
+message UpdatePpcLookupResponse {
+  common.v1.BaseResponse base = 1;
+  PpcLookup data = 2;
+}
+
+message DeletePpcLookupRequest {
+  int64 lookup_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeletePpcLookupResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+message ListPpcLookupsRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 200
+  }];
+  string category = 3 [(buf.validate.field).string.max_len = 40]; // empty = all categories
+  string search = 4 [(buf.validate.field).string.max_len = 100];
+  ActiveFilter active_filter = 5;
+}
+
+message ListPpcLookupsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated PpcLookup data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ── PpcShift ─────────────────────────────────────────────────────────────────
+
+// PpcShift is the genuine shift master (per-row attributes). end_time may be
+// earlier than start_time to model a shift crossing midnight. Times are HH:MM.
+message PpcShift {
+  int64 shift_id = 1;
+  string code = 2; // 1 / 2 / 3
+  string name = 3;
+  string start_time = 4; // HH:MM
+  string end_time = 5; // HH:MM
+  bool is_active = 6;
+  common.v1.AuditInfo audit = 16;
+}
+
+message CreatePpcShiftRequest {
+  string code = 1 [(buf.validate.field).string = {
+    len: 1
+    pattern: "^[0-9]$"
+  }];
+  string name = 2 [(buf.validate.field).string.max_len = 40];
+  string start_time = 3 [(buf.validate.field).string.pattern = "^([01][0-9]|2[0-3]):[0-5][0-9]$"];
+  string end_time = 4 [(buf.validate.field).string.pattern = "^([01][0-9]|2[0-3]):[0-5][0-9]$"];
+}
+
+message CreatePpcShiftResponse {
+  common.v1.BaseResponse base = 1;
+  PpcShift data = 2;
+}
+
+message GetPpcShiftRequest {
+  int64 shift_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetPpcShiftResponse {
+  common.v1.BaseResponse base = 1;
+  PpcShift data = 2;
+}
+
+message UpdatePpcShiftRequest {
+  int64 shift_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional string name = 2 [(buf.validate.field).string.max_len = 40];
+  optional string start_time = 3 [(buf.validate.field).string.pattern = "^([01][0-9]|2[0-3]):[0-5][0-9]$"];
+  optional string end_time = 4 [(buf.validate.field).string.pattern = "^([01][0-9]|2[0-3]):[0-5][0-9]$"];
+  optional bool is_active = 5;
+}
+
+message UpdatePpcShiftResponse {
+  common.v1.BaseResponse base = 1;
+  PpcShift data = 2;
+}
+
+message DeletePpcShiftRequest {
+  int64 shift_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeletePpcShiftResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+message ListPpcShiftsRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  ActiveFilter active_filter = 3;
+}
+
+message ListPpcShiftsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated PpcShift data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}

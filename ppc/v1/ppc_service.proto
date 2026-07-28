@@ -1,0 +1,762 @@
+syntax = "proto3";
+
+package ppc.v1;
+
+import "google/api/annotations.proto";
+import "ppc/v1/changeover.proto";
+import "ppc/v1/customer.proto";
+import "ppc/v1/daily_performance.proto";
+import "ppc/v1/dashboard.proto";
+import "ppc/v1/demand.proto";
+import "ppc/v1/master.proto";
+import "ppc/v1/packing.proto";
+import "ppc/v1/plan_item.proto";
+import "ppc/v1/work_order.proto";
+
+// =============================================================================
+// PPCService aggregates all Production Planning & Control RPCs.
+// REST is exposed via grpc-gateway under /api/v1/ppc/*.
+// =============================================================================
+
+service PPCService {
+  // ── Masters: MachineGroup ──────────────────────────────────────────────────
+  // CreateMachineGroup creates a machine group.
+  rpc CreateMachineGroup(CreateMachineGroupRequest) returns (CreateMachineGroupResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/machine-groups"
+      body: "*"
+    };
+  }
+  // GetMachineGroup gets a machine group by id.
+  rpc GetMachineGroup(GetMachineGroupRequest) returns (GetMachineGroupResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/machine-groups/{group_id}"};
+  }
+  // UpdateMachineGroup updates a machine group.
+  rpc UpdateMachineGroup(UpdateMachineGroupRequest) returns (UpdateMachineGroupResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/machine-groups/{group_id}"
+      body: "*"
+    };
+  }
+  // DeleteMachineGroup soft-deletes a machine group.
+  rpc DeleteMachineGroup(DeleteMachineGroupRequest) returns (DeleteMachineGroupResponse) {
+    option (google.api.http) = {delete: "/api/v1/ppc/machine-groups/{group_id}"};
+  }
+  // ListMachineGroups lists machine groups.
+  rpc ListMachineGroups(ListMachineGroupsRequest) returns (ListMachineGroupsResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/machine-groups"};
+  }
+
+  // ── Masters: Machine (sync-sourced) ────────────────────────────────────────
+  // CreateMachine hand-adds a machine (rare; normal flow is SyncMachines).
+  rpc CreateMachine(CreateMachineRequest) returns (CreateMachineResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/machines"
+      body: "*"
+    };
+  }
+  // GetMachine gets a machine by id.
+  rpc GetMachine(GetMachineRequest) returns (GetMachineResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/machines/{machine_id}"};
+  }
+  // UpdateMachine edits PPC-only machine fields (preserved across syncs).
+  rpc UpdateMachine(UpdateMachineRequest) returns (UpdateMachineResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/machines/{machine_id}"
+      body: "*"
+    };
+  }
+  // ListMachines lists machines.
+  rpc ListMachines(ListMachinesRequest) returns (ListMachinesResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/machines"};
+  }
+  // SyncMachines triggers an on-demand machine sync from finance + Oracle.
+  rpc SyncMachines(SyncMachinesRequest) returns (SyncMachinesResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/machines/sync"
+      body: "*"
+    };
+  }
+
+  // ── Masters: Customer (sync-sourced from Oracle OM_CUSTOMER) ───────────────
+  // CreateCustomer hand-adds a customer (marked MANUAL; sync never overwrites it).
+  rpc CreateCustomer(CreateCustomerRequest) returns (CreateCustomerResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/customers"
+      body: "*"
+    };
+  }
+  // GetCustomer gets a customer by id.
+  rpc GetCustomer(GetCustomerRequest) returns (GetCustomerResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/customers/{customer_id}"};
+  }
+  // UpdateCustomer edits a customer; the code is immutable.
+  rpc UpdateCustomer(UpdateCustomerRequest) returns (UpdateCustomerResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/customers/{customer_id}"
+      body: "*"
+    };
+  }
+  // ListCustomers lists customers.
+  rpc ListCustomers(ListCustomersRequest) returns (ListCustomersResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/customers"};
+  }
+  // SyncCustomers triggers an on-demand read-only sync from Oracle OM_CUSTOMER.
+  rpc SyncCustomers(SyncCustomersRequest) returns (SyncCustomersResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/customers/sync"
+      body: "*"
+    };
+  }
+  // ExportCustomers exports the customer master to an Excel workbook.
+  rpc ExportCustomers(ExportCustomersRequest) returns (ExportCustomersResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/customers/export"};
+  }
+  // ImportCustomers bulk-creates or updates customers from an Excel workbook.
+  rpc ImportCustomers(ImportCustomersRequest) returns (ImportCustomersResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/customers/import"
+      body: "*"
+    };
+  }
+  // DownloadCustomerTemplate returns the customer import template workbook.
+  rpc DownloadCustomerTemplate(DownloadCustomerTemplateRequest) returns (DownloadCustomerTemplateResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/customers/template"};
+  }
+
+  // ── Masters: LotMaster ─────────────────────────────────────────────────────
+  // CreateLotMaster creates a lot master.
+  rpc CreateLotMaster(CreateLotMasterRequest) returns (CreateLotMasterResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/lots"
+      body: "*"
+    };
+  }
+  // GetLotMaster gets a lot master by lot number.
+  rpc GetLotMaster(GetLotMasterRequest) returns (GetLotMasterResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/lots/{lot_no}"};
+  }
+  // UpdateLotMaster updates a lot master.
+  rpc UpdateLotMaster(UpdateLotMasterRequest) returns (UpdateLotMasterResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/lots/{lot_no}"
+      body: "*"
+    };
+  }
+  // DeleteLotMaster soft-deletes a lot master.
+  rpc DeleteLotMaster(DeleteLotMasterRequest) returns (DeleteLotMasterResponse) {
+    option (google.api.http) = {delete: "/api/v1/ppc/lots/{lot_no}"};
+  }
+  // ListLotMasters lists lot masters.
+  rpc ListLotMasters(ListLotMastersRequest) returns (ListLotMastersResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/lots"};
+  }
+  // SyncLots triggers an on-demand read-only import from Oracle ASPAK.MMSMERGE.
+  rpc SyncLots(SyncLotsRequest) returns (SyncLotsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/lots/sync"
+      body: "*"
+    };
+  }
+
+  // ── Masters: ProductPPCConfig ──────────────────────────────────────────────
+  // CreateProductPPCConfig creates a product PPC config.
+  rpc CreateProductPPCConfig(CreateProductPPCConfigRequest) returns (CreateProductPPCConfigResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/product-configs"
+      body: "*"
+    };
+  }
+  // GetProductPPCConfig gets a product PPC config by id.
+  rpc GetProductPPCConfig(GetProductPPCConfigRequest) returns (GetProductPPCConfigResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/product-configs/{config_id}"};
+  }
+  // UpdateProductPPCConfig updates a product PPC config.
+  rpc UpdateProductPPCConfig(UpdateProductPPCConfigRequest) returns (UpdateProductPPCConfigResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/product-configs/{config_id}"
+      body: "*"
+    };
+  }
+  // DeleteProductPPCConfig soft-deletes a product PPC config.
+  rpc DeleteProductPPCConfig(DeleteProductPPCConfigRequest) returns (DeleteProductPPCConfigResponse) {
+    option (google.api.http) = {delete: "/api/v1/ppc/product-configs/{config_id}"};
+  }
+  // ListProductPPCConfigs lists product PPC configs.
+  rpc ListProductPPCConfigs(ListProductPPCConfigsRequest) returns (ListProductPPCConfigsResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/product-configs"};
+  }
+
+  // ── Masters: ProductMachineCapacity ────────────────────────────────────────
+  // CreateProductMachineCapacity creates a product-machine capacity row.
+  rpc CreateProductMachineCapacity(CreateProductMachineCapacityRequest) returns (CreateProductMachineCapacityResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/machine-capacities"
+      body: "*"
+    };
+  }
+  // GetProductMachineCapacity gets a product-machine capacity by id.
+  rpc GetProductMachineCapacity(GetProductMachineCapacityRequest) returns (GetProductMachineCapacityResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/machine-capacities/{capacity_id}"};
+  }
+  // UpdateProductMachineCapacity updates a product-machine capacity.
+  rpc UpdateProductMachineCapacity(UpdateProductMachineCapacityRequest) returns (UpdateProductMachineCapacityResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/machine-capacities/{capacity_id}"
+      body: "*"
+    };
+  }
+  // DeleteProductMachineCapacity soft-deletes a product-machine capacity.
+  rpc DeleteProductMachineCapacity(DeleteProductMachineCapacityRequest) returns (DeleteProductMachineCapacityResponse) {
+    option (google.api.http) = {delete: "/api/v1/ppc/machine-capacities/{capacity_id}"};
+  }
+  // ListProductMachineCapacities lists product-machine capacities.
+  rpc ListProductMachineCapacities(ListProductMachineCapacitiesRequest) returns (ListProductMachineCapacitiesResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/machine-capacities"};
+  }
+
+  // ── Masters: ProductMachineParameter (v1.2) ────────────────────────────────
+  // CreateProductMachineParameter creates a per-product+machine param value.
+  rpc CreateProductMachineParameter(CreateProductMachineParameterRequest) returns (CreateProductMachineParameterResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/machine-parameters"
+      body: "*"
+    };
+  }
+  // GetProductMachineParameter gets a per-product+machine param value by id.
+  rpc GetProductMachineParameter(GetProductMachineParameterRequest) returns (GetProductMachineParameterResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/machine-parameters/{pmp_id}"};
+  }
+  // UpdateProductMachineParameter updates a per-product+machine param value.
+  rpc UpdateProductMachineParameter(UpdateProductMachineParameterRequest) returns (UpdateProductMachineParameterResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/machine-parameters/{pmp_id}"
+      body: "*"
+    };
+  }
+  // DeleteProductMachineParameter soft-deletes a per-product+machine param value.
+  rpc DeleteProductMachineParameter(DeleteProductMachineParameterRequest) returns (DeleteProductMachineParameterResponse) {
+    option (google.api.http) = {delete: "/api/v1/ppc/machine-parameters/{pmp_id}"};
+  }
+  // ListProductMachineParameters lists per-product+machine param values.
+  rpc ListProductMachineParameters(ListProductMachineParametersRequest) returns (ListProductMachineParametersResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/machine-parameters"};
+  }
+
+  // ── Masters: OverrunThresholdConfig ────────────────────────────────────────
+  // CreateOverrunThresholdConfig creates an over-production threshold.
+  rpc CreateOverrunThresholdConfig(CreateOverrunThresholdConfigRequest) returns (CreateOverrunThresholdConfigResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/overrun-thresholds"
+      body: "*"
+    };
+  }
+  // GetOverrunThresholdConfig gets an over-production threshold by id.
+  rpc GetOverrunThresholdConfig(GetOverrunThresholdConfigRequest) returns (GetOverrunThresholdConfigResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/overrun-thresholds/{threshold_id}"};
+  }
+  // UpdateOverrunThresholdConfig updates an over-production threshold.
+  rpc UpdateOverrunThresholdConfig(UpdateOverrunThresholdConfigRequest) returns (UpdateOverrunThresholdConfigResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/overrun-thresholds/{threshold_id}"
+      body: "*"
+    };
+  }
+  // DeleteOverrunThresholdConfig soft-deletes an over-production threshold.
+  rpc DeleteOverrunThresholdConfig(DeleteOverrunThresholdConfigRequest) returns (DeleteOverrunThresholdConfigResponse) {
+    option (google.api.http) = {delete: "/api/v1/ppc/overrun-thresholds/{threshold_id}"};
+  }
+  // ListOverrunThresholdConfigs lists over-production thresholds.
+  rpc ListOverrunThresholdConfigs(ListOverrunThresholdConfigsRequest) returns (ListOverrunThresholdConfigsResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/overrun-thresholds"};
+  }
+
+  // ── Masters: DowntimeReasonMaster ──────────────────────────────────────────
+  // CreateDowntimeReasonMaster creates a downtime reason.
+  rpc CreateDowntimeReasonMaster(CreateDowntimeReasonMasterRequest) returns (CreateDowntimeReasonMasterResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/downtime-reasons"
+      body: "*"
+    };
+  }
+  // GetDowntimeReasonMaster gets a downtime reason by id.
+  rpc GetDowntimeReasonMaster(GetDowntimeReasonMasterRequest) returns (GetDowntimeReasonMasterResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/downtime-reasons/{reason_id}"};
+  }
+  // UpdateDowntimeReasonMaster updates a downtime reason.
+  rpc UpdateDowntimeReasonMaster(UpdateDowntimeReasonMasterRequest) returns (UpdateDowntimeReasonMasterResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/downtime-reasons/{reason_id}"
+      body: "*"
+    };
+  }
+  // DeleteDowntimeReasonMaster soft-deletes a downtime reason.
+  rpc DeleteDowntimeReasonMaster(DeleteDowntimeReasonMasterRequest) returns (DeleteDowntimeReasonMasterResponse) {
+    option (google.api.http) = {delete: "/api/v1/ppc/downtime-reasons/{reason_id}"};
+  }
+  // ListDowntimeReasonMasters lists downtime reasons.
+  rpc ListDowntimeReasonMasters(ListDowntimeReasonMastersRequest) returns (ListDowntimeReasonMastersResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/downtime-reasons"};
+  }
+
+  // ── Masters: WasteCategoryMaster ───────────────────────────────────────────
+  // CreateWasteCategoryMaster creates a waste category.
+  rpc CreateWasteCategoryMaster(CreateWasteCategoryMasterRequest) returns (CreateWasteCategoryMasterResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/waste-categories"
+      body: "*"
+    };
+  }
+  // GetWasteCategoryMaster gets a waste category by id.
+  rpc GetWasteCategoryMaster(GetWasteCategoryMasterRequest) returns (GetWasteCategoryMasterResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/waste-categories/{category_id}"};
+  }
+  // UpdateWasteCategoryMaster updates a waste category.
+  rpc UpdateWasteCategoryMaster(UpdateWasteCategoryMasterRequest) returns (UpdateWasteCategoryMasterResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/waste-categories/{category_id}"
+      body: "*"
+    };
+  }
+  // DeleteWasteCategoryMaster soft-deletes a waste category.
+  rpc DeleteWasteCategoryMaster(DeleteWasteCategoryMasterRequest) returns (DeleteWasteCategoryMasterResponse) {
+    option (google.api.http) = {delete: "/api/v1/ppc/waste-categories/{category_id}"};
+  }
+  // ListWasteCategoryMasters lists waste categories.
+  rpc ListWasteCategoryMasters(ListWasteCategoryMastersRequest) returns (ListWasteCategoryMastersResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/waste-categories"};
+  }
+
+  // ── Layer 1: Demand + Sales Order staging ──────────────────────────────────
+  // ListSalesOrderStaging lists the ETL SO inbox (LOV source).
+  rpc ListSalesOrderStaging(ListSalesOrderStagingRequest) returns (ListSalesOrderStagingResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/sales-order-staging"};
+  }
+  // ListSalesOrderStagingIds returns the ids of every staging row matching a
+  // filter (capped), backing the LOV's "select all matching" action.
+  rpc ListSalesOrderStagingIds(ListSalesOrderStagingIdsRequest) returns (ListSalesOrderStagingIdsResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/sales-order-staging/ids"};
+  }
+  // SetStagingProduct persists a manual product pick on a staging row.
+  rpc SetStagingProduct(SetStagingProductRequest) returns (SetStagingProductResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/sales-order-staging/{sos_id}/product"
+      body: "*"
+    };
+  }
+  // CreateDemand creates a demand.
+  rpc CreateDemand(CreateDemandRequest) returns (CreateDemandResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/demands"
+      body: "*"
+    };
+  }
+  // GetDemand gets a demand by id.
+  rpc GetDemand(GetDemandRequest) returns (GetDemandResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/demands/{demand_id}"};
+  }
+  // UpdateDemand updates a demand.
+  rpc UpdateDemand(UpdateDemandRequest) returns (UpdateDemandResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/demands/{demand_id}"
+      body: "*"
+    };
+  }
+  // MapDemandProduct maps a product onto a demand that currently has none.
+  // Rejected if the demand is already mapped to a product.
+  rpc MapDemandProduct(MapDemandProductRequest) returns (MapDemandProductResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/demands/{demand_id}/map-product"
+      body: "*"
+    };
+  }
+  // DeleteDemand soft-deletes a demand.
+  rpc DeleteDemand(DeleteDemandRequest) returns (DeleteDemandResponse) {
+    option (google.api.http) = {delete: "/api/v1/ppc/demands/{demand_id}"};
+  }
+  // ListDemands lists demands.
+  rpc ListDemands(ListDemandsRequest) returns (ListDemandsResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/demands"};
+  }
+  // ConfirmDemand confirms a pending demand.
+  rpc ConfirmDemand(ConfirmDemandRequest) returns (ConfirmDemandResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/demands/{demand_id}/confirm"
+      body: "*"
+    };
+  }
+  // PullFromOrion creates demands from selected SO staging rows.
+  rpc PullFromOrion(PullFromOrionRequest) returns (PullFromOrionResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/demands/pull-from-orion"
+      body: "*"
+    };
+  }
+  // ListCarryForwardCandidates lists demands eligible for carry-forward.
+  rpc ListCarryForwardCandidates(ListCarryForwardCandidatesRequest) returns (ListCarryForwardCandidatesResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/demands/carry-forward-candidates"};
+  }
+  // ProcessCarryForward executes a per-demand carry-forward action.
+  rpc ProcessCarryForward(ProcessCarryForwardRequest) returns (ProcessCarryForwardResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/demands/{source_demand_id}/carry-forward"
+      body: "*"
+    };
+  }
+  // ApproveMTSDemand records the Marketing MTS approval decision.
+  rpc ApproveMTSDemand(ApproveMTSDemandRequest) returns (ApproveMTSDemandResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/demands/{demand_id}/approve-mts"
+      body: "*"
+    };
+  }
+
+  // ── Layer 2: Plan Item + Gantt ─────────────────────────────────────────────
+  // CreatePlanItem creates a plan item.
+  rpc CreatePlanItem(CreatePlanItemRequest) returns (CreatePlanItemResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/plan-items"
+      body: "*"
+    };
+  }
+  // GetPlanItem gets a plan item by id.
+  rpc GetPlanItem(GetPlanItemRequest) returns (GetPlanItemResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/plan-items/{plan_item_id}"};
+  }
+  // UpdatePlanItem updates a plan item.
+  rpc UpdatePlanItem(UpdatePlanItemRequest) returns (UpdatePlanItemResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/plan-items/{plan_item_id}"
+      body: "*"
+    };
+  }
+  // DeletePlanItem soft-deletes a plan item.
+  rpc DeletePlanItem(DeletePlanItemRequest) returns (DeletePlanItemResponse) {
+    option (google.api.http) = {delete: "/api/v1/ppc/plan-items/{plan_item_id}"};
+  }
+  // ListPlanItems lists plan items.
+  rpc ListPlanItems(ListPlanItemsRequest) returns (ListPlanItemsResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/plan-items"};
+  }
+  // GetGanttView returns scheduled bars for the plan timeline.
+  rpc GetGanttView(GetGanttViewRequest) returns (GetGanttViewResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/plan-items/gantt"};
+  }
+
+  // ── Layer 3: Work Order ────────────────────────────────────────────────────
+  // CreateWorkOrder creates a work order.
+  rpc CreateWorkOrder(CreateWorkOrderRequest) returns (CreateWorkOrderResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/work-orders"
+      body: "*"
+    };
+  }
+  // GetWorkOrder gets a work order by id.
+  rpc GetWorkOrder(GetWorkOrderRequest) returns (GetWorkOrderResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/work-orders/{wo_id}"};
+  }
+  // UpdateWorkOrder updates a work order.
+  rpc UpdateWorkOrder(UpdateWorkOrderRequest) returns (UpdateWorkOrderResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/work-orders/{wo_id}"
+      body: "*"
+    };
+  }
+  // DeleteWorkOrder soft-deletes a work order.
+  rpc DeleteWorkOrder(DeleteWorkOrderRequest) returns (DeleteWorkOrderResponse) {
+    option (google.api.http) = {delete: "/api/v1/ppc/work-orders/{wo_id}"};
+  }
+  // ListWorkOrders lists work orders.
+  rpc ListWorkOrders(ListWorkOrdersRequest) returns (ListWorkOrdersResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/work-orders"};
+  }
+  // ListMergeCandidates lists plan items mergeable into one WO with an anchor.
+  rpc ListMergeCandidates(ListMergeCandidatesRequest) returns (ListMergeCandidatesResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/work-orders/merge-candidates"};
+  }
+  // ResolveWOParameters previews the resolved parameter chain for product+machine.
+  rpc ResolveWOParameters(ResolveWOParametersRequest) returns (ResolveWOParametersResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/work-orders/resolve-parameters"
+      body: "*"
+    };
+  }
+  // SaveWOParameters upserts the planned PPC parameter values for a WO.
+  rpc SaveWOParameters(SaveWOParametersRequest) returns (SaveWOParametersResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/work-orders/{wo_id}/parameters"
+      body: "*"
+    };
+  }
+  // SaveWORmAllocations replaces the RM allocation lines for a WO.
+  rpc SaveWORmAllocations(SaveWORmAllocationsRequest) returns (SaveWORmAllocationsResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/work-orders/{wo_id}/rm-allocations"
+      body: "*"
+    };
+  }
+  // PopulateWORmFromRoute auto-materializes RM allocation suggestions from the WO's route.
+  rpc PopulateWORmFromRoute(PopulateWORmFromRouteRequest) returns (PopulateWORmFromRouteResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/work-orders/{wo_id}/rm-allocations/populate-from-route"
+      body: "*"
+    };
+  }
+  // SaveWOExecution upserts an actual parameter value for a date+shift+param.
+  rpc SaveWOExecution(SaveWOExecutionRequest) returns (SaveWOExecutionResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/work-orders/{wo_id}/executions"
+      body: "*"
+    };
+  }
+  // ListWOExecutions lists actual parameter values for a WO.
+  rpc ListWOExecutions(ListWOExecutionsRequest) returns (ListWOExecutionsResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/work-orders/{wo_id}/executions"};
+  }
+  // SubmitWO submits a WO for sequential PC->PM approval.
+  rpc SubmitWO(SubmitWORequest) returns (SubmitWOResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/work-orders/{wo_id}/submit"
+      body: "*"
+    };
+  }
+  // ApproveWOParameter is the PC step: fill/confirm the PC parameter values.
+  rpc ApproveWOParameter(ApproveWOParameterRequest) returns (ApproveWOParameterResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/work-orders/{wo_id}/approve-parameter"
+      body: "*"
+    };
+  }
+  // ApproveWO records a sequential approval side (PC then PM).
+  rpc ApproveWO(ApproveWORequest) returns (ApproveWOResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/work-orders/{wo_id}/approve"
+      body: "*"
+    };
+  }
+  // RejectWO sends a submitted WO back to PPC.
+  rpc RejectWO(RejectWORequest) returns (RejectWOResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/work-orders/{wo_id}/reject"
+      body: "*"
+    };
+  }
+  // CreateWOReference creates a new WO from a prior one (duplicate/continuation).
+  rpc CreateWOReference(CreateWOReferenceRequest) returns (CreateWOReferenceResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/work-orders/{source_wo_id}/reference"
+      body: "*"
+    };
+  }
+  // GetWOProductionActual lists the production actuals for a WO.
+  rpc GetWOProductionActual(GetWOProductionActualRequest) returns (GetWOProductionActualResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/work-orders/{wo_id}/production-actual"};
+  }
+  // AdjustWOActual sets qty_actual away from the immutable qty_bobbin baseline.
+  rpc AdjustWOActual(AdjustWOActualRequest) returns (AdjustWOActualResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/work-orders/{wo_id}/production-actual/adjust"
+      body: "*"
+    };
+  }
+  // SuggestWOActual previews the suggest-chain qty for a date+shift.
+  rpc SuggestWOActual(SuggestWOActualRequest) returns (SuggestWOActualResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/work-orders/{wo_id}/production-actual/suggest"};
+  }
+
+  // ── Daily Performance ──────────────────────────────────────────────────────
+  // SubmitShiftEntry submits a machine shift log plus downtime/waste lines.
+  rpc SubmitShiftEntry(SubmitShiftEntryRequest) returns (SubmitShiftEntryResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/shift-entries"
+      body: "*"
+    };
+  }
+  // SubmitAreaShiftLog records area-level shift data.
+  rpc SubmitAreaShiftLog(SubmitAreaShiftLogRequest) returns (SubmitAreaShiftLogResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/area-shift-logs"
+      body: "*"
+    };
+  }
+  // ListMachineShiftLogs lists machine shift logs.
+  rpc ListMachineShiftLogs(ListMachineShiftLogsRequest) returns (ListMachineShiftLogsResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/shift-entries"};
+  }
+  // RecalcEfficiency triggers an efficiency snapshot recompute.
+  rpc RecalcEfficiency(RecalcEfficiencyRequest) returns (RecalcEfficiencyResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/efficiency-snapshots/recalc"
+      body: "*"
+    };
+  }
+  // ListEfficiencySnapshots lists efficiency snapshots.
+  rpc ListEfficiencySnapshots(ListEfficiencySnapshotsRequest) returns (ListEfficiencySnapshotsResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/efficiency-snapshots"};
+  }
+
+  // ── Daily Performance: ShiftLogNote (v1.2) ─────────────────────────────────
+  // CreateShiftLogNote creates a log-book note (INSTRUKSI / ACTIVITY).
+  rpc CreateShiftLogNote(CreateShiftLogNoteRequest) returns (CreateShiftLogNoteResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/shift-log-notes"
+      body: "*"
+    };
+  }
+  // GetShiftLogNote gets a log-book note by id.
+  rpc GetShiftLogNote(GetShiftLogNoteRequest) returns (GetShiftLogNoteResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/shift-log-notes/{note_id}"};
+  }
+  // UpdateShiftLogNote updates a log-book note.
+  rpc UpdateShiftLogNote(UpdateShiftLogNoteRequest) returns (UpdateShiftLogNoteResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/shift-log-notes/{note_id}"
+      body: "*"
+    };
+  }
+  // DeleteShiftLogNote soft-deletes a log-book note.
+  rpc DeleteShiftLogNote(DeleteShiftLogNoteRequest) returns (DeleteShiftLogNoteResponse) {
+    option (google.api.http) = {delete: "/api/v1/ppc/shift-log-notes/{note_id}"};
+  }
+  // ListShiftLogNotes lists log-book notes.
+  rpc ListShiftLogNotes(ListShiftLogNotesRequest) returns (ListShiftLogNotesResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/shift-log-notes"};
+  }
+
+  // ── Dashboards ─────────────────────────────────────────────────────────────
+  // GetMorningReview returns the morning-review aggregation.
+  rpc GetMorningReview(GetMorningReviewRequest) returns (GetMorningReviewResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/dashboard/morning-review"};
+  }
+  // GetBalanceForSale returns the AX balance-for-sale aggregation.
+  rpc GetBalanceForSale(GetBalanceForSaleRequest) returns (GetBalanceForSaleResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/dashboard/balance-for-sale"};
+  }
+  // GetDailyPerformance returns the daily-performance KPI aggregation.
+  rpc GetDailyPerformance(GetDailyPerformanceRequest) returns (GetDailyPerformanceResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/dashboard/daily-performance"};
+  }
+
+  // ── Changeover (Phase 2) ───────────────────────────────────────────────────
+  // GetChangeoverEvent gets a changeover event with its components.
+  rpc GetChangeoverEvent(GetChangeoverEventRequest) returns (GetChangeoverEventResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/changeover-events/{event_id}"};
+  }
+  // ListChangeoverEvents lists changeover events.
+  rpc ListChangeoverEvents(ListChangeoverEventsRequest) returns (ListChangeoverEventsResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/changeover-events"};
+  }
+  // DetectChangeover previews active components + duration/waste/group (no persist).
+  rpc DetectChangeover(DetectChangeoverRequest) returns (DetectChangeoverResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/changeover-events/detect"
+      body: "*"
+    };
+  }
+  // CreateChangeoverEvent persists a planned changeover event.
+  rpc CreateChangeoverEvent(CreateChangeoverEventRequest) returns (CreateChangeoverEventResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/changeover-events"
+      body: "*"
+    };
+  }
+  // StartChangeover transitions a PLANNED event to IN_PROGRESS.
+  rpc StartChangeover(StartChangeoverRequest) returns (StartChangeoverResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/changeover-events/{event_id}/start"
+      body: "*"
+    };
+  }
+  // UpdateChangeoverActual records actual duration/waste and completes the event.
+  rpc UpdateChangeoverActual(UpdateChangeoverActualRequest) returns (UpdateChangeoverActualResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/changeover-events/{event_id}/actual"
+      body: "*"
+    };
+  }
+
+  // ── Packing & Grading (Phase 3) ────────────────────────────────────────────
+  // ListWOGradeActuals lists packing-done grade-actual lines (PPC_GRADE_ACTUAL).
+  rpc ListWOGradeActuals(ListWOGradeActualsRequest) returns (ListWOGradeActualsResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/grade-actuals"};
+  }
+
+  // ── Common lot (Phase 3) ───────────────────────────────────────────────────
+  // CreateCommonLot combines leftover bobbins across shades into a new ERP lot.
+  rpc CreateCommonLot(CreateCommonLotRequest) returns (CreateCommonLotResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/common-lots"
+      body: "*"
+    };
+  }
+  // GetCommonLot gets a common lot with its components.
+  rpc GetCommonLot(GetCommonLotRequest) returns (GetCommonLotResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/common-lots/{common_lot_id}"};
+  }
+  // ListCommonLots lists common lots.
+  rpc ListCommonLots(ListCommonLotsRequest) returns (ListCommonLotsResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/common-lots"};
+  }
+
+  // ── Analytics: Excel export (Phase 3) ──────────────────────────────────────
+  // ExportDailyPerformance exports daily-performance snapshots to an Excel workbook.
+  rpc ExportDailyPerformance(ExportDailyPerformanceRequest) returns (ExportDailyPerformanceResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/dashboard/daily-performance/export"};
+  }
+
+  // ── Masters: PpcLookup (display metadata for FE dropdowns) ──────────────────
+  // CreatePpcLookup creates a lookup row (display label for an enum code).
+  rpc CreatePpcLookup(CreatePpcLookupRequest) returns (CreatePpcLookupResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/lookups"
+      body: "*"
+    };
+  }
+  // GetPpcLookup gets a lookup row by id.
+  rpc GetPpcLookup(GetPpcLookupRequest) returns (GetPpcLookupResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/lookups/{lookup_id}"};
+  }
+  // UpdatePpcLookup updates a lookup row's label/order/active-state.
+  rpc UpdatePpcLookup(UpdatePpcLookupRequest) returns (UpdatePpcLookupResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/lookups/{lookup_id}"
+      body: "*"
+    };
+  }
+  // DeletePpcLookup deletes a lookup row.
+  rpc DeletePpcLookup(DeletePpcLookupRequest) returns (DeletePpcLookupResponse) {
+    option (google.api.http) = {delete: "/api/v1/ppc/lookups/{lookup_id}"};
+  }
+  // ListPpcLookups lists lookup rows, optionally filtered by category.
+  rpc ListPpcLookups(ListPpcLookupsRequest) returns (ListPpcLookupsResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/lookups"};
+  }
+
+  // ── Masters: PpcShift ───────────────────────────────────────────────────────
+  // CreatePpcShift creates a shift.
+  rpc CreatePpcShift(CreatePpcShiftRequest) returns (CreatePpcShiftResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/shifts"
+      body: "*"
+    };
+  }
+  // GetPpcShift gets a shift by id.
+  rpc GetPpcShift(GetPpcShiftRequest) returns (GetPpcShiftResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/shifts/{shift_id}"};
+  }
+  // UpdatePpcShift updates a shift.
+  rpc UpdatePpcShift(UpdatePpcShiftRequest) returns (UpdatePpcShiftResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/ppc/shifts/{shift_id}"
+      body: "*"
+    };
+  }
+  // DeletePpcShift deletes a shift.
+  rpc DeletePpcShift(DeletePpcShiftRequest) returns (DeletePpcShiftResponse) {
+    option (google.api.http) = {delete: "/api/v1/ppc/shifts/{shift_id}"};
+  }
+  // ListPpcShifts lists shifts.
+  rpc ListPpcShifts(ListPpcShiftsRequest) returns (ListPpcShiftsResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/shifts"};
+  }
+}

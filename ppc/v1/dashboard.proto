@@ -1,0 +1,121 @@
+syntax = "proto3";
+
+package ppc.v1;
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "ppc/v1/common.proto";
+
+// =============================================================================
+// Dashboards — server-side aggregation for the /production-plan pages.
+// Morning review, balance-for-sale, and daily-performance summaries.
+// Decimals are decimal-as-string.
+// =============================================================================
+
+// MorningReviewMachineRow is one machine's actual-vs-plan line.
+message MorningReviewMachineRow {
+  int64 machine_id = 1;
+  string machine_no = 2;
+  AreaCode area = 3;
+  string qty_target = 4; // decimal-as-string
+  string qty_actual = 5; // decimal-as-string
+  string variance_pct = 6; // decimal-as-string
+  // OVER / UNDER / ON_TARGET
+  string flag = 7;
+  bool is_changeover = 8;
+}
+
+// MorningReviewIssue is an open issue needing action.
+message MorningReviewIssue {
+  string issue_type = 1; // RM_LIMIT / OVER_PRODUCTION / PENDING_APPROVAL / UNMATCHED_SO
+  int64 ref_id = 2; // wo_id / demand_id depending on type
+  string title = 3;
+  string detail = 4;
+  string severity = 5; // INFO / WARNING / BLOCK
+}
+
+// MorningReviewPriority is a WO that must run today.
+message MorningReviewPriority {
+  int64 wo_id = 1;
+  string trans_no = 2;
+  string product_code = 3;
+  string machine_no = 4;
+  string deadline = 5; // ISO-8601 date
+  string qty_target = 6; // decimal-as-string
+}
+
+message GetMorningReviewRequest {
+  string date = 1 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 10
+  }];
+  AreaCode area = 2; // UNSPECIFIED = all areas.
+}
+
+message GetMorningReviewResponse {
+  common.v1.BaseResponse base = 1;
+  repeated MorningReviewMachineRow actual_vs_plan = 2;
+  repeated MorningReviewIssue open_issues = 3;
+  repeated MorningReviewPriority priorities = 4;
+  int32 machines_running = 5;
+  int32 machines_total = 6;
+  int32 wos_pending_approval = 7;
+  int32 unmatched_so_count = 8;
+}
+
+// BalanceForSaleRow is per-commodity-watch product AX balance.
+message BalanceForSaleRow {
+  int64 cpm_product_sys_id = 1;
+  string product_code = 2;
+  string product_name = 3;
+  string current_stock_ax = 4; // decimal-as-string
+  string wo_running_output_est = 5; // decimal-as-string
+  string mts_plan_qty = 6; // decimal-as-string
+  string committed_contract_qty = 7; // decimal-as-string
+  string balance_for_sale = 8; // decimal-as-string
+}
+
+message GetBalanceForSaleRequest {
+  optional int64 cpm_product_sys_id = 1 [(buf.validate.field).int64.gt = 0];
+  // When true, restrict to commodity-watch products only (default true in app).
+  optional bool commodity_watch_only = 2;
+}
+
+message GetBalanceForSaleResponse {
+  common.v1.BaseResponse base = 1;
+  repeated BalanceForSaleRow data = 2;
+}
+
+// DailyPerformanceKpi is one KPI card value (today + MTD).
+message DailyPerformanceKpi {
+  string key = 1; // e.g. total_production / eff_dty_incl / waste_pct
+  string label = 2;
+  string value_today = 3; // decimal-as-string
+  string value_mtd = 4; // decimal-as-string
+  string unit = 5; // KG / PCT / HOURS
+}
+
+// McEffCell is one machine-shift efficiency heatmap cell.
+message McEffCell {
+  int64 machine_id = 1;
+  string machine_no = 2;
+  string date = 3; // ISO-8601 date
+  string shift = 4;
+  string eff_pct = 5; // decimal-as-string
+}
+
+message GetDailyPerformanceRequest {
+  string date = 1 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 10
+  }];
+  AreaCode area = 2; // UNSPECIFIED = all areas.
+  // When true, produce Excluding-classification figures.
+  optional bool excluding = 3;
+}
+
+message GetDailyPerformanceResponse {
+  common.v1.BaseResponse base = 1;
+  repeated DailyPerformanceKpi kpis = 2;
+  repeated McEffCell mc_eff_grid = 3;
+}

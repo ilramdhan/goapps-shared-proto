@@ -49,3 +49,4 @@ inputs:
       - common
       - finance
       - iam
+      - ppc
