@@ -1,0 +1,156 @@
+syntax = "proto3";
+
+package ppc.v1;
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+
+// =============================================================================
+// Changeover (Phase 2) — component-based (BASE, C1-C7) machine changeover
+// between two work orders. Messages are defined now; RPCs are wired in Phase 2.
+// Decimals are decimal-as-string.
+// =============================================================================
+
+// ChangeoverComponent is one applied changeover component (BASE or C1-C7).
+message ChangeoverComponent {
+  int64 component_id = 1;
+  int64 event_id = 2;
+  string component_code = 3; // BASE / C1..C7
+  int32 duration_applied = 4; // minutes
+  string waste_applied = 5; // decimal-as-string (kg)
+  bool is_auto_detected = 6;
+  int64 override_by = 7;
+  string override_at = 8; // ISO-8601
+}
+
+// ChangeoverEvent is a changeover between two WOs on a machine.
+message ChangeoverEvent {
+  int64 event_id = 1;
+  int64 from_wo_id = 2;
+  int64 to_wo_id = 3;
+  int64 machine_id = 4;
+  string machine_no = 5; // denormalized for UI
+  int32 duration_estimated = 6; // minutes
+  string waste_estimated = 7; // decimal-as-string (kg)
+  string group = 8; // MINOR / MEDIUM / MAJOR / DEEP
+  int32 duration_actual = 9;
+  string waste_actual = 10; // decimal-as-string (kg)
+  string status = 11; // PLANNED / IN_PROGRESS / DONE
+  string started_at = 12; // ISO-8601
+  string completed_at = 13; // ISO-8601
+  string notes = 14;
+  repeated ChangeoverComponent components = 15;
+  common.v1.AuditInfo audit = 16;
+}
+
+// GetChangeoverEvent retrieves a single changeover event with its components.
+message GetChangeoverEventRequest {
+  int64 event_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetChangeoverEventResponse {
+  common.v1.BaseResponse base = 1;
+  ChangeoverEvent data = 2;
+}
+
+// ListChangeoverEvents lists changeover events for a machine/date window.
+message ListChangeoverEventsRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  optional int64 machine_id = 3;
+  string date_from = 4 [(buf.validate.field).string.max_len = 10];
+  string date_to = 5 [(buf.validate.field).string.max_len = 10];
+  string status = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "PLANNED",
+      "IN_PROGRESS",
+      "DONE"
+    ]
+  }];
+}
+
+message ListChangeoverEventsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated ChangeoverEvent data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ChangeoverComponentInput is a PPC override line for a create request
+// (add/remove/adjust auto-detected components).
+message ChangeoverComponentInput {
+  string component_code = 1 [(buf.validate.field).string = {
+    in: [
+      "BASE",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "C5",
+      "C6",
+      "C7"
+    ]
+  }];
+  int32 duration_applied = 2 [(buf.validate.field).int32.gte = 0]; // minutes
+  string waste_applied = 3 [(buf.validate.field).string.max_len = 30]; // decimal-as-string (kg)
+}
+
+// DetectChangeover previews the active components (BASE, C1-C7), estimated
+// duration/waste and group for a hypothetical changeover between two WOs.
+// It does NOT persist anything.
+message DetectChangeoverRequest {
+  int64 from_wo_id = 1 [(buf.validate.field).int64.gt = 0];
+  int64 to_wo_id = 2 [(buf.validate.field).int64.gt = 0];
+  bool deep_clean = 3; // force C7 deep-clean component
+}
+
+message DetectChangeoverResponse {
+  common.v1.BaseResponse base = 1;
+  repeated ChangeoverComponent components = 2;
+  int32 duration_estimated = 3; // minutes
+  string waste_estimated = 4; // decimal-as-string (kg)
+  string group = 5; // MINOR / MEDIUM / MAJOR / DEEP
+}
+
+// CreateChangeoverEvent persists a planned changeover event. When components
+// are omitted they are auto-detected from the WO spec diff; machine_id = 0
+// resolves to the destination WO's machine.
+message CreateChangeoverEventRequest {
+  int64 from_wo_id = 1 [(buf.validate.field).int64.gt = 0];
+  int64 to_wo_id = 2 [(buf.validate.field).int64.gt = 0];
+  int64 machine_id = 3 [(buf.validate.field).int64.gte = 0]; // 0 = resolve from to_wo
+  bool deep_clean = 4;
+  string notes = 5 [(buf.validate.field).string.max_len = 1000];
+  repeated ChangeoverComponentInput components = 6; // empty = auto-detect
+}
+
+message CreateChangeoverEventResponse {
+  common.v1.BaseResponse base = 1;
+  ChangeoverEvent data = 2;
+}
+
+// StartChangeover transitions a PLANNED event to IN_PROGRESS.
+message StartChangeoverRequest {
+  int64 event_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message StartChangeoverResponse {
+  common.v1.BaseResponse base = 1;
+  ChangeoverEvent data = 2;
+}
+
+// UpdateChangeoverActual records actual duration/waste and completes the event.
+message UpdateChangeoverActualRequest {
+  int64 event_id = 1 [(buf.validate.field).int64.gt = 0];
+  int32 duration_actual = 2 [(buf.validate.field).int32.gte = 0]; // minutes
+  string waste_actual = 3 [(buf.validate.field).string.max_len = 30]; // decimal-as-string (kg)
+  string notes = 4 [(buf.validate.field).string.max_len = 1000];
+}
+
+message UpdateChangeoverActualResponse {
+  common.v1.BaseResponse base = 1;
+  ChangeoverEvent data = 2;
+}

@@ -1,0 +1,194 @@
+syntax = "proto3";
+
+package ppc.v1;
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "ppc/v1/common.proto";
+
+// =============================================================================
+// PPC customer master (Phase 1).
+//
+// Rows originate from Oracle MGTDAT.OM_CUSTOMER via a read-only ETL sync and are
+// keyed on customer_code. Hand-authored rows are marked MANUAL and are never
+// overwritten by the sync, so a planner's entry survives a code collision.
+// =============================================================================
+
+// Customer is the PPC customer master row.
+message Customer {
+  int64 customer_id = 1;
+  string customer_code = 2; // Orion OM_CUSTOMER.CUST_CODE; natural key.
+  string customer_name = 3;
+  string customer_short_name = 4;
+  string customer_tax_no = 5; // NPWP.
+  string customer_parent_code = 6; // Group head; empty when standalone.
+  bool customer_is_active = 7; // Inverse of Orion CUST_FRZ_FLAG_NUM.
+  string customer_source = 8; // ORACLE / MANUAL.
+  string source_created_at = 9; // ISO-8601; Orion CUST_CR_DT.
+  string source_updated_at = 10; // ISO-8601; Orion CUST_UPD_DT.
+  string synced_at = 11; // ISO-8601; last successful Oracle sync.
+  common.v1.AuditInfo audit = 16;
+}
+
+// Create hand-adds a customer; the row is marked MANUAL.
+message CreateCustomerRequest {
+  string customer_code = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 30
+  }];
+  string customer_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 240
+  }];
+  string customer_short_name = 3 [(buf.validate.field).string.max_len = 60];
+  string customer_tax_no = 4 [(buf.validate.field).string.max_len = 60];
+  string customer_parent_code = 5 [(buf.validate.field).string.max_len = 30];
+}
+
+message CreateCustomerResponse {
+  common.v1.BaseResponse base = 1;
+  Customer data = 2;
+}
+
+message GetCustomerRequest {
+  int64 customer_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetCustomerResponse {
+  common.v1.BaseResponse base = 1;
+  Customer data = 2;
+}
+
+// Update edits a customer. The code is immutable — it is the key the sync
+// upserts on.
+message UpdateCustomerRequest {
+  int64 customer_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional string customer_name = 2 [(buf.validate.field).string.max_len = 240];
+  optional string customer_short_name = 3 [(buf.validate.field).string.max_len = 60];
+  optional string customer_tax_no = 4 [(buf.validate.field).string.max_len = 60];
+  optional string customer_parent_code = 5 [(buf.validate.field).string.max_len = 30];
+  optional bool customer_is_active = 6;
+}
+
+message UpdateCustomerResponse {
+  common.v1.BaseResponse base = 1;
+  Customer data = 2;
+}
+
+message ListCustomersRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  ActiveFilter active_filter = 4;
+  string customer_source = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "ORACLE",
+      "MANUAL"
+    ]
+  }];
+  string sort_by = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "code",
+      "name",
+      "short_name",
+      "is_active",
+      "source",
+      "synced_at",
+      "created_at"
+    ]
+  }];
+  string sort_order = 7 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+message ListCustomersResponse {
+  common.v1.BaseResponse base = 1;
+  repeated Customer data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// SyncCustomers triggers an on-demand read-only upsert from Oracle OM_CUSTOMER.
+message SyncCustomersRequest {}
+
+message SyncCustomersResponse {
+  common.v1.BaseResponse base = 1;
+  int32 inserted_count = 2;
+  int32 updated_count = 3;
+  int32 unchanged_count = 4;
+  bool source_used = 5; // False when Oracle was unconfigured (no-op run).
+}
+
+// ── Excel export / import ────────────────────────────────────────────────────
+
+message ExportCustomersRequest {
+  string search = 1 [(buf.validate.field).string.max_len = 100];
+  ActiveFilter active_filter = 2;
+  string customer_source = 3 [(buf.validate.field).string = {
+    in: [
+      "",
+      "ORACLE",
+      "MANUAL"
+    ]
+  }];
+}
+
+message ExportCustomersResponse {
+  common.v1.BaseResponse base = 1;
+  bytes file_content = 2; // .xlsx bytes
+  string file_name = 3;
+}
+
+message ImportCustomersRequest {
+  bytes file_content = 1 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 10485760 // 10MB max
+  }];
+  string file_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 255
+    pattern: "^[^/\\\\]+\\.(xlsx|xls)$"
+  }];
+  // How to handle existing codes: "skip", "update", "error".
+  string duplicate_action = 3 [(buf.validate.field).string = {
+    in: [
+      "skip",
+      "update",
+      "error"
+    ]
+    min_len: 1
+  }];
+}
+
+message ImportCustomersResponse {
+  common.v1.BaseResponse base = 1;
+  int32 success_count = 2;
+  int32 skipped_count = 3;
+  int32 updated_count = 4;
+  int32 failed_count = 5;
+  repeated CustomerImportError errors = 6;
+}
+
+// CustomerImportError reports one failed import row.
+message CustomerImportError {
+  int32 row_number = 1;
+  string field = 2;
+  string message = 3;
+}
+
+message DownloadCustomerTemplateRequest {}
+
+message DownloadCustomerTemplateResponse {
+  common.v1.BaseResponse base = 1;
+  bytes file_content = 2; // .xlsx bytes
+  string file_name = 3;
+}

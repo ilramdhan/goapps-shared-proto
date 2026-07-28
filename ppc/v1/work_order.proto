@@ -1,0 +1,663 @@
+syntax = "proto3";
+
+package ppc.v1;
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "google/protobuf/struct.proto";
+import "ppc/v1/common.proto";
+import "ppc/v1/plan_item.proto";
+
+// =============================================================================
+// Layer 3 — Work Order v1.2 (route-driven + product-parameter-driven).
+// A WO is a concrete per-machine per-lot production instruction generated from
+// a plan item. It inherits from a released Costing route (spec, RM composition,
+// routing) and from the demand (customer, grade req). Machine parameters are
+// consumed from the Costing product-parameter module (mst_parameter +
+// cost_product_parameter) — no fixed parameter columns.
+//
+// Approval is sequential PC -> PM (v1.2, was parallel). Decimals are
+// transported as strings (decimal-as-string); typed param values follow the
+// cost_product_parameter convention: numeric/text as string, flag as bool.
+// =============================================================================
+
+// WOParameter is one planned machine parameter for a WO (1:N, per param).
+// 3-level pattern: PPC proposed value -> PC confirmed value -> actual
+// (WOExecution). is_dual is true only for the 8 dual params (config, not a
+// master flag). Typed by the referenced mst_parameter.data_type.
+message WOParameter {
+  int64 wop_id = 1;
+  int64 wo_id = 2;
+  string param_id = 3; // UUID, FK mst_parameter (Costing)
+  string param_code = 4; // denormalized for UI (e.g. "SPEED")
+  string param_name = 5; // denormalized for UI
+  string data_type = 6; // NUMBER / TEXT / BOOLEAN
+  string display_group = 7; // denormalized (e.g. "Machine")
+  // PPC proposed value (typed by data_type).
+  string value_ppc_num = 8; // decimal-as-string
+  string value_ppc_text = 9;
+  bool value_ppc_flag = 10;
+  // PC confirmed value (filled at PC approval; defaults to the PPC value).
+  string value_pc_num = 11; // decimal-as-string
+  string value_pc_text = 12;
+  bool value_pc_flag = 13;
+  bool is_dual = 14; // true only for the 8 dual PPC/PC params
+  int32 display_order = 15;
+}
+
+// WOExecution is an actual machine parameter recorded per date+shift+param
+// (1:N). Also carries actual-only params not part of the plan (e.g. ACY
+// Heater, D/R, Steps Process). Typed by the referenced param's data_type.
+message WOExecution {
+  int64 woe_id = 1;
+  int64 wo_id = 2;
+  string date = 3; // ISO-8601 date
+  string shift = 4; // 1 / 2 / 3
+  string param_id = 5; // UUID, FK mst_parameter
+  string param_code = 6; // denormalized for UI
+  string value_num = 7; // decimal-as-string
+  string value_text = 8;
+  bool value_flag = 9;
+  int64 input_by = 10;
+  string input_at = 11; // ISO-8601
+}
+
+// WORmAllocation is one RM component from the route (cost_route_rm), N per WO
+// (replaces the legacy POY/chips 1/2/3 fixed slots). rm_type=PRODUCT forms
+// automatic lot genealogy between products.
+message WORmAllocation {
+  int64 wra_id = 1;
+  int64 wo_id = 2;
+  int64 crm_rm_id = 3; // FK cost_route_rm (route RM component)
+  string rm_type = 4; // PRODUCT / ITEM / GROUP (from crm_rm_type)
+  string lot_no = 5; // actual lot chosen
+  RMSource rm_source = 6; // STORE / CAPTIVE / MIXED
+  string fresh_box = 7; // Fresh / Box
+  string shade_code = 8;
+  string qty_allocated = 9; // decimal-as-string
+  string notes = 10;
+}
+
+// WOProductionActual is the 1:N per date+shift production actual (two-axis
+// model, v1.2). Audit axis: qty_bobbin (immutable ETL baseline) + qty_actual
+// (editable, default = qty_bobbin) + qty_source (BOBBIN/ADJUSTED). SPG dual
+// basis: qty_doffed_kg (efficiency) vs qty_transferred_kg (fulfillment).
+// Efficiency is ALWAYS derived from qty_actual. Including/Excluding is derived
+// from the WO's prod_category — not stored here.
+message WOProductionActual {
+  int64 actual_id = 1;
+  int64 wo_id = 2;
+  string date = 3; // ISO-8601 date
+  string shift = 4; // 1 / 2 / 3
+  AreaCode area = 5;
+
+  // TXT/TWT bobbin columns (TRN_STS 0=Full, 1=Unfull).
+  int32 total_bobbins = 6;
+  int32 full_bobbins = 7;
+  int32 unfull_bobbins = 8;
+  int32 normal_bobs = 9;
+  int32 downgrade_bobs = 10;
+  int32 pending_bobs = 11;
+  int32 pack_cek_bobs = 12;
+
+  // SPG bobbin columns (DOFF_OPTION 1=Full, 2=Unfull).
+  int32 gross_bobbins = 13;
+  int32 transferred_bobs = 14;
+  int32 cut_bobbins = 15;
+  int32 not_transfer = 16;
+  int32 normal_bobs_spg = 17;
+  int32 downgrade_bobs_spg = 18;
+  int32 not_checked_bobs = 19;
+  string weight_per_bob = 20; // decimal-as-string
+
+  // Two-axis audit (v1.2) — replaces legacy _ORGL.
+  string qty_bobbin = 21; // decimal-as-string, immutable ETL baseline
+  string qty_actual = 22; // decimal-as-string, editable, default = qty_bobbin
+  QtyAxisSource qty_source = 23; // BOBBIN / ADJUSTED
+  string adjust_reason = 24; // why qty_actual != qty_bobbin (audit)
+
+  // SPG dual basis: doffed = efficiency, transferred = fulfillment.
+  string qty_doffed_kg = 25; // decimal-as-string
+  string qty_transferred_kg = 26; // decimal-as-string
+
+  // Operator KPI shift inputs (legacy YARNBREAK_1/2/3, doff, CO failure).
+  int32 breaks_shift1 = 27;
+  int32 breaks_shift2 = 28;
+  int32 breaks_shift3 = 29;
+  int32 doff_full_count = 30;
+  int32 doff_manual_count = 31;
+  int32 co_failure_count = 32;
+
+  // ETL metadata.
+  string sync_status = 33; // OK / SYNC_FAILED / PENDING
+  string synced_at = 34; // ISO-8601
+  int64 last_edited_by = 35;
+  string last_edited_at = 36; // ISO-8601
+}
+
+// WorkOrder is the Layer-3 aggregate root (v1.2).
+message WorkOrder {
+  int64 wo_id = 1;
+  string wo_no = 2; // unique WO number
+  AreaCode area = 3; // TXT / SPG / TWT
+  int64 machine_id = 4;
+  string machine_no = 5; // denormalized for UI
+  // PPC-generated lot number, UNIQUE — the lot source bobbin tracking must use
+  // so production ETL joins back to the WO by lot.
+  string lot_no = 6;
+
+  // Route snapshot (cost_route_head; WO locks the version at generate/approve).
+  int64 crh_head_id = 7;
+  int32 crh_version = 8;
+  int64 plan_item_id = 9; // originating plan item
+  int64 demand_id = 10; // originating demand (customer/grade req flow from here)
+
+  // WO Reference (duplicate / continuation).
+  int64 ref_wo_id = 11; // referenced prior WO (0 = none)
+  WORefType ref_type = 12; // TEMPLATE (duplicate) / CONTINUATION
+
+  string qty_target = 13; // decimal-as-string
+  // Grade requirement (default from demand; WO may override).
+  string grade_requirement = 14;
+  string deadline = 15; // ISO-8601 date
+
+  ProdCategory prod_category = 17; // NORMAL / B_TO_B / APQ / TRIAL / SMALL_LOT
+
+  // Snapshots taken at approve (JSONB <-> Struct). spec = den/fil/type/ply/
+  // shade/twist; packing = box/paper-tube/package-weight/pallet.
+  google.protobuf.Struct spec_snapshot = 18;
+  google.protobuf.Struct packing_snapshot = 19;
+
+  int32 revision_no = 20;
+  string revision_reason = 21; // shown on the WO face (e.g. "PINDAH MC 05")
+  WOStatus status = 22;
+  // When true the 24h auto-approve is disabled — WO will not run without an
+  // explicit PM approval.
+  bool auto_approve_disabled = 23;
+
+  // Sequential PC -> PM approval audit.
+  int64 pc_approved_by = 24;
+  string pc_approved_at = 25; // ISO-8601
+  int64 pm_approved_by = 26;
+  string pm_approved_at = 27; // ISO-8601
+  string submitted_at = 28; // ISO-8601
+
+  // Denormalized product projection (from finance CostMasterLookup).
+  string cpm_product_code = 29;
+  string cpm_product_name = 30;
+
+  // Children.
+  repeated WOParameter parameters = 31;
+  repeated WORmAllocation rm_allocations = 32;
+  repeated WOProductionActual production_actuals = 33;
+  // Every plan item this WO covers, including the anchor (plan_item_id above).
+  // A merged WO carries more than one; each row holds its qty contribution.
+  repeated WOPlanItemLink linked_plan_items = 34;
+
+  common.v1.AuditInfo audit = 16;
+}
+
+// WOPlanItemLink is one plan item covered by a work order (wo_plan_item_link).
+// Merging several plan items — same product, same machine group, compatible
+// shade, deadlines within a window — into ONE work order is an explicit
+// planner action; this is the row that records it, and its qty contribution.
+message WOPlanItemLink {
+  int64 wpl_id = 1;
+  int64 wo_id = 2;
+  int64 plan_item_id = 3;
+  string qty_contribution = 4; // decimal-as-string
+  // Denormalized plan-item projection for the WO detail pane.
+  string product_code = 5;
+  string product_name = 6;
+  string shade_code = 7;
+  string shade_name = 8;
+  string deadline = 9; // ISO-8601 date
+  bool is_anchor = 10; // true for the plan item the planner started from
+}
+
+// ── WO CRUD ──────────────────────────────────────────────────────────────────
+
+message CreateWorkOrderRequest {
+  AreaCode area = 1 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  int64 plan_item_id = 2 [(buf.validate.field).int64.gt = 0];
+  int64 machine_id = 3 [(buf.validate.field).int64.gt = 0];
+  int64 crh_head_id = 4 [(buf.validate.field).int64.gt = 0];
+  int32 crh_version = 5 [(buf.validate.field).int32.gte = 1];
+  // Blank means "mint one": the server generates a transcribable
+  // {AREA}{SEQ:04d}-{YY} lot, registers it in lot_master and persists the work
+  // order in the same transaction. A supplied lot must already exist in
+  // lot_master and is rejected otherwise — never silently created. No min_len
+  // here on purpose; requiring one made the generator unreachable through the
+  // RPC. Bound matches work_order.wo_lot_no VARCHAR(30).
+  string lot_no = 6 [(buf.validate.field).string.max_len = 30];
+  optional int64 demand_id = 7 [(buf.validate.field).int64.gt = 0];
+  string qty_target = 8 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  string deadline = 9 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 10
+  }];
+  optional string grade_requirement = 10 [(buf.validate.field).string.max_len = 5];
+  optional ProdCategory prod_category = 11 [(buf.validate.field).enum.defined_only = true];
+  optional bool auto_approve_disabled = 12;
+  // Merge: extra plan items covered by this WO alongside the anchor
+  // (plan_item_id). Always an explicit planner choice, never automatic. Each
+  // must satisfy the merge predicate against the anchor (see
+  // ListMergeCandidates) — the server re-validates and rejects otherwise.
+  repeated int64 additional_plan_item_ids = 13 [(buf.validate.field).repeated = {
+    max_items: 50
+    items: {
+      int64: {gt: 0}
+    }
+  }];
+  // Per-item qty contribution, decimal-as-string, positionally aligned with
+  // additional_plan_item_ids. Omit (or leave empty) to default to that plan
+  // item's qty_target. The WO qty_target becomes the sum of the anchor's
+  // contribution and these.
+  repeated string qty_contributions = 14 [(buf.validate.field).repeated = {
+    max_items: 50
+    items: {
+      string: {max_len: 20}
+    }
+  }];
+}
+
+message CreateWorkOrderResponse {
+  common.v1.BaseResponse base = 1;
+  WorkOrder data = 2;
+}
+
+message GetWorkOrderRequest {
+  int64 wo_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetWorkOrderResponse {
+  common.v1.BaseResponse base = 1;
+  WorkOrder data = 2;
+}
+
+message UpdateWorkOrderRequest {
+  int64 wo_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional int64 machine_id = 2 [(buf.validate.field).int64.gt = 0];
+  optional string lot_no = 3 [(buf.validate.field).string.max_len = 30];
+  optional string qty_target = 4 [(buf.validate.field).string.max_len = 20];
+  optional string deadline = 5 [(buf.validate.field).string.max_len = 10];
+  optional string grade_requirement = 6 [(buf.validate.field).string.max_len = 5];
+  optional ProdCategory prod_category = 7 [(buf.validate.field).enum.defined_only = true];
+  optional bool auto_approve_disabled = 8;
+  // Required when revising an approved/running WO (shown on the WO face).
+  optional string revision_reason = 9 [(buf.validate.field).string.max_len = 500];
+}
+
+message UpdateWorkOrderResponse {
+  common.v1.BaseResponse base = 1;
+  WorkOrder data = 2;
+}
+
+message DeleteWorkOrderRequest {
+  int64 wo_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeleteWorkOrderResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+message ListWorkOrdersRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  AreaCode area = 4; // UNSPECIFIED = no filter.
+  WOStatus status = 5; // UNSPECIFIED = no filter.
+  optional int64 machine_id = 6;
+  optional int64 plan_item_id = 7;
+  optional int64 demand_id = 8;
+  string lot_no = 9 [(buf.validate.field).string.max_len = 30];
+  string sort_by = 10 [(buf.validate.field).string = {
+    in: [
+      "",
+      "wo_no",
+      "deadline",
+      "machine_no",
+      "status",
+      "created_at"
+    ]
+  }];
+  string sort_order = 11 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+message ListWorkOrdersResponse {
+  common.v1.BaseResponse base = 1;
+  repeated WorkOrder data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ── WO parameters (param-per-row) ────────────────────────────────────────────
+
+// WOParamValueInput is one typed parameter value in a submit/approve payload.
+// value_flag is a real bool — callers set has_value_flag to opt in for BOOLEAN
+// params (cannot distinguish "unset" from FALSE otherwise).
+message WOParamValueInput {
+  string param_id = 1 [(buf.validate.field).string.uuid = true];
+  string value_num = 2 [(buf.validate.field).string.max_len = 40]; // decimal-as-string
+  string value_text = 3 [(buf.validate.field).string.max_len = 500];
+  bool value_flag = 4;
+  bool has_value_flag = 5;
+}
+
+// SaveWOParameters upserts the planned PPC parameter values on a DRAFT WO
+// (materialized param rows). Does not change status.
+message SaveWOParametersRequest {
+  int64 wo_id = 1 [(buf.validate.field).int64.gt = 0];
+  repeated WOParamValueInput ppc_values = 2 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 200
+  }];
+}
+
+message SaveWOParametersResponse {
+  common.v1.BaseResponse base = 1;
+  WorkOrder data = 2;
+}
+
+// ── Parameter resolution (v1.2 chain) ────────────────────────────────────────
+
+// ResolvedParam is one param resolved through the WO parameter chain:
+// WO-ref -> product_machine_parameter -> cost_product_parameter -> default.
+message ResolvedParam {
+  string param_id = 1; // UUID
+  string param_code = 2;
+  string param_name = 3;
+  string data_type = 4; // NUMBER / TEXT / BOOLEAN
+  string display_group = 5;
+  bool is_dual = 6;
+  int32 display_order = 7;
+  string value_num = 8; // decimal-as-string
+  string value_text = 9;
+  bool value_flag = 10;
+  ParamResolutionSource source = 11; // which layer supplied the value
+}
+
+// ResolveWOParameters previews the resolved parameter set for a product on a
+// machine (optionally seeded by a reference WO), before materializing the WO.
+message ResolveWOParametersRequest {
+  int64 cpm_product_sys_id = 1 [(buf.validate.field).int64.gt = 0];
+  int64 machine_id = 2 [(buf.validate.field).int64.gt = 0];
+  // Optional reference WO to seed the top layer (duplicate/continuation).
+  optional int64 ref_wo_id = 3 [(buf.validate.field).int64.gt = 0];
+  // Filter to a display_group (e.g. "Machine"). Empty = all WO groups.
+  string display_group = 4 [(buf.validate.field).string.max_len = 50];
+}
+
+message ResolveWOParametersResponse {
+  common.v1.BaseResponse base = 1;
+  repeated ResolvedParam data = 2;
+}
+
+// ── WO execution (actual params per date+shift) ──────────────────────────────
+
+// SaveWOExecution upserts an actual parameter value for a date+shift+param.
+message SaveWOExecutionRequest {
+  int64 wo_id = 1 [(buf.validate.field).int64.gt = 0];
+  string date = 2 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 10
+  }];
+  string shift = 3 [(buf.validate.field).string = {
+    len: 1
+    pattern: "^[1-3]$"
+  }];
+  string param_id = 4 [(buf.validate.field).string.uuid = true];
+  string value_num = 5 [(buf.validate.field).string.max_len = 40];
+  string value_text = 6 [(buf.validate.field).string.max_len = 500];
+  bool value_flag = 7;
+  bool has_value_flag = 8;
+}
+
+message SaveWOExecutionResponse {
+  common.v1.BaseResponse base = 1;
+  WOExecution data = 2;
+}
+
+message ListWOExecutionsRequest {
+  int64 wo_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional string date = 2 [(buf.validate.field).string.max_len = 10];
+  optional string shift = 3 [(buf.validate.field).string.max_len = 1];
+}
+
+message ListWOExecutionsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated WOExecution data = 2;
+}
+
+// ── WO RM allocation ─────────────────────────────────────────────────────────
+
+// WORmAllocationInput is one RM allocation line in a save payload.
+message WORmAllocationInput {
+  int64 crm_rm_id = 1 [(buf.validate.field).int64.gt = 0];
+  string rm_type = 2 [(buf.validate.field).string = {
+    in: [
+      "PRODUCT",
+      "ITEM",
+      "GROUP"
+    ]
+  }];
+  string lot_no = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 30
+  }];
+  RMSource rm_source = 4 [(buf.validate.field).enum.defined_only = true];
+  optional string fresh_box = 5 [(buf.validate.field).string.max_len = 5];
+  optional string shade_code = 6 [(buf.validate.field).string.max_len = 30];
+  string qty_allocated = 7 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  optional string notes = 8 [(buf.validate.field).string.max_len = 500];
+}
+
+// SaveWORmAllocations replaces the RM allocation lines for a WO.
+message SaveWORmAllocationsRequest {
+  int64 wo_id = 1 [(buf.validate.field).int64.gt = 0];
+  repeated WORmAllocationInput allocations = 2 [(buf.validate.field).repeated.max_items = 100];
+}
+
+message SaveWORmAllocationsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated WORmAllocation data = 2;
+}
+
+// PopulateWORmFromRoute auto-materializes RM allocation lines for a WO from its
+// product route (cost_route_rm), one line per route RM component with a
+// ratio-derived qty suggestion. PPC then reviews/adjusts and persists via
+// SaveWORmAllocations. When replace=true the suggested lines also replace the
+// stored allocations in the same call.
+message PopulateWORmFromRouteRequest {
+  int64 wo_id = 1 [(buf.validate.field).int64.gt = 0];
+  bool replace = 2; // also persist (replace stored lines) with the suggestions
+}
+
+message PopulateWORmFromRouteResponse {
+  common.v1.BaseResponse base = 1;
+  repeated WORmAllocation data = 2;
+}
+
+// ── WO lifecycle actions ─────────────────────────────────────────────────────
+
+// SubmitWO moves a DRAFT WO to SUBMITTED, optionally setting/confirming the PPC
+// parameter values in the same call.
+message SubmitWORequest {
+  int64 wo_id = 1 [(buf.validate.field).int64.gt = 0];
+  repeated WOParamValueInput ppc_values = 2 [(buf.validate.field).repeated.max_items = 200];
+}
+
+message SubmitWOResponse {
+  common.v1.BaseResponse base = 1;
+  WorkOrder data = 2;
+}
+
+// ApproveWOParameter is the PC step: review + fill/confirm the PC parameter
+// values. Moves SUBMITTED -> PC_APPROVED (sequential; PM approves after).
+message ApproveWOParameterRequest {
+  int64 wo_id = 1 [(buf.validate.field).int64.gt = 0];
+  // PC values (default to the PPC values when omitted).
+  repeated WOParamValueInput pc_values = 2 [(buf.validate.field).repeated.max_items = 200];
+}
+
+message ApproveWOParameterResponse {
+  common.v1.BaseResponse base = 1;
+  WorkOrder data = 2;
+}
+
+// ApproveWO records a sequential approval. approval_side="PC" moves
+// SUBMITTED -> PC_APPROVED; "PM" moves PC_APPROVED -> APPROVED (PM only after
+// PC). Snapshots (spec/packing) are taken at approval.
+message ApproveWORequest {
+  int64 wo_id = 1 [(buf.validate.field).int64.gt = 0];
+  string approval_side = 2 [(buf.validate.field).string = {
+    in: [
+      "PC",
+      "PM"
+    ]
+  }];
+}
+
+message ApproveWOResponse {
+  common.v1.BaseResponse base = 1;
+  WorkOrder data = 2;
+}
+
+// RejectWO sends a submitted WO back to PPC with a reason (manual + audited).
+message RejectWORequest {
+  int64 wo_id = 1 [(buf.validate.field).int64.gt = 0];
+  string reason = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 500
+  }];
+}
+
+message RejectWOResponse {
+  common.v1.BaseResponse base = 1;
+  WorkOrder data = 2;
+}
+
+// CreateWOReference creates a new WO from a prior one. TEMPLATE = duplicate
+// (soft copy of PPC params, new lot, no binding); CONTINUATION = hard link
+// inheriting the source demand + params (remaining qty tops up the same demand).
+message CreateWOReferenceRequest {
+  int64 source_wo_id = 1 [(buf.validate.field).int64.gt = 0];
+  WORefType ref_type = 2 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  string lot_no = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 30
+  }];
+  string qty_target = 4 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  string deadline = 5 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 10
+  }];
+  // Optional machine override (defaults to the source WO's machine).
+  optional int64 machine_id = 6 [(buf.validate.field).int64.gt = 0];
+}
+
+message CreateWOReferenceResponse {
+  common.v1.BaseResponse base = 1;
+  WorkOrder data = 2;
+}
+
+// ── Production actual (two-axis) ─────────────────────────────────────────────
+
+message GetWOProductionActualRequest {
+  int64 wo_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional string date = 2 [(buf.validate.field).string.max_len = 10];
+  optional string shift = 3 [(buf.validate.field).string.max_len = 1];
+}
+
+message GetWOProductionActualResponse {
+  common.v1.BaseResponse base = 1;
+  repeated WOProductionActual data = 2;
+}
+
+// AdjustWOActual sets qty_actual (audit axis) away from the immutable
+// qty_bobbin baseline, marking the row ADJUSTED and logging the correction.
+message AdjustWOActualRequest {
+  int64 wo_id = 1 [(buf.validate.field).int64.gt = 0];
+  string date = 2 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 10
+  }];
+  string shift = 3 [(buf.validate.field).string = {
+    len: 1
+    pattern: "^[1-3]$"
+  }];
+  string qty_actual = 4 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  string reason = 5 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 500
+  }];
+}
+
+message AdjustWOActualResponse {
+  common.v1.BaseResponse base = 1;
+  WOProductionActual data = 2;
+}
+
+// SuggestWOActual runs the suggest priority chain and returns the computed qty
+// without persisting (preview). QtySource is the suggest-chain provenance.
+message SuggestWOActualRequest {
+  int64 wo_id = 1 [(buf.validate.field).int64.gt = 0];
+  string date = 2 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 10
+  }];
+  string shift = 3 [(buf.validate.field).string = {
+    len: 1
+    pattern: "^[1-3]$"
+  }];
+}
+
+message SuggestWOActualResponse {
+  common.v1.BaseResponse base = 1;
+  string suggested_qty_kg = 2; // decimal-as-string
+  QtySource qty_source = 3;
+}
+
+// ── WO merge ─────────────────────────────────────────────────────────────────
+
+// ListMergeCandidates returns plan items that may be merged into one work
+// order with the given anchor, per the union rule: same product, same machine
+// group, compatible shade (identical, or both natural), deadline within
+// window_days. Already-linked plan items are never returned.
+message ListMergeCandidatesRequest {
+  int64 anchor_plan_item_id = 1 [(buf.validate.field).int64.gt = 0];
+  // Deadline tolerance in days. Unset (0) means the 7-day default.
+  int32 window_days = 2 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 30
+  }];
+}
+
+message ListMergeCandidatesResponse {
+  common.v1.BaseResponse base = 1;
+  repeated PlanItem data = 2;
+}

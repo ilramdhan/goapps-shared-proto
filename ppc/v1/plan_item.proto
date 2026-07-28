@@ -1,0 +1,221 @@
+syntax = "proto3";
+
+package ppc.v1;
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "ppc/v1/common.proto";
+
+// =============================================================================
+// Layer 2 — Production Plan Item (the living monthly plan) + Gantt view.
+// A plan item derives from a demand (FG) or a parent item (intermediate).
+// Decimals are decimal-as-string.
+// =============================================================================
+
+// PlanItem is one Layer-2 planning row.
+message PlanItem {
+  int64 plan_item_id = 1;
+  int64 cpm_product_sys_id = 2; // soft ref
+  string product_code = 3; // denormalized for UI
+  string product_name = 4; // denormalized for UI
+  PlanItemType type = 5;
+  int64 demand_id = 6; // set for FG items
+  int64 parent_item_id = 7; // set for intermediate items
+  string qty_target = 8; // decimal-as-string
+  string deadline = 9; // ISO-8601 date
+  RMSource rm_source = 10;
+  int32 sequence = 11;
+  PlanItemStatus status = 12;
+  int64 machine_group_id = 13;
+  int64 preferred_machine_id = 14;
+  string month = 15; // YYYY-MM, derived from deadline
+  string notes = 17;
+  common.v1.AuditInfo audit = 16;
+  string planned_start_date = 18; // ISO-8601 date, empty when not scheduled
+  int32 planned_duration_days = 19; // 0 when not scheduled
+  string duration_source = 20; // DERIVED | MANUAL
+  // Shade (colour) of the route product at this level. Natural at upstream
+  // levels, which is what makes those items mergeable into one work order.
+  string shade_code = 21;
+  string shade_name = 22;
+}
+
+message CreatePlanItemRequest {
+  int64 cpm_product_sys_id = 1 [(buf.validate.field).int64.gt = 0];
+  PlanItemType type = 2 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  // Exactly one of demand_id / parent_item_id is expected (validated in app).
+  optional int64 demand_id = 3 [(buf.validate.field).int64.gt = 0];
+  optional int64 parent_item_id = 4 [(buf.validate.field).int64.gt = 0];
+  string qty_target = 5 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  string deadline = 6 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 10
+  }];
+  optional RMSource rm_source = 7 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  int64 machine_group_id = 8 [(buf.validate.field).int64.gt = 0];
+  optional int64 preferred_machine_id = 9 [(buf.validate.field).int64.gt = 0];
+  // Derived from deadline unless month_override is set (carry-forward only).
+  optional string month = 10 [(buf.validate.field).string = {
+    len: 7
+    pattern: "^[0-9]{4}-[0-9]{2}$"
+  }];
+  optional string notes = 11 [(buf.validate.field).string.max_len = 2000];
+  // Optional planner-supplied timeline. Setting either marks the item MANUAL;
+  // omitting both leaves the duration system-derived from qty/capacity.
+  optional string planned_start_date = 12 [(buf.validate.field).string.max_len = 10];
+  optional int32 planned_duration_days = 13 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 60
+  }];
+  // Allows month to diverge from the deadline (carry-forward remainder).
+  bool month_override = 14;
+}
+
+message CreatePlanItemResponse {
+  common.v1.BaseResponse base = 1;
+  PlanItem data = 2;
+  // Deprecated: use `children` instead. Kept populated with `children[0]` for
+  // one release so clients built against the single-child cascade keep working
+  // during a rolling deploy.
+  PlanItem child_data = 3 [deprecated = true];
+  // Every cascade-generated upstream INTERMEDIATE plan item, ordered by
+  // increasing route level (closest to the FG first). Empty when the product
+  // has no released route, in which case `cascade_warning` explains why.
+  repeated PlanItem children = 4;
+  // Explains a save that legitimately succeeded but generated no upstream
+  // items — most often a product whose route is still DRAFT rather than
+  // COMPLETE/LOCKED. Empty when the cascade ran normally. A dedicated field,
+  // not a suffix on base.message, so the client never has to parse prose.
+  string cascade_warning = 5;
+}
+
+message GetPlanItemRequest {
+  int64 plan_item_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetPlanItemResponse {
+  common.v1.BaseResponse base = 1;
+  PlanItem data = 2;
+}
+
+// Update edits mutable fields; changes are recorded in production_plan_log.
+message UpdatePlanItemRequest {
+  int64 plan_item_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional string qty_target = 2 [(buf.validate.field).string.max_len = 20];
+  optional string deadline = 3 [(buf.validate.field).string.max_len = 10];
+  optional RMSource rm_source = 4 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  optional int32 sequence = 5 [(buf.validate.field).int32.gte = 0];
+  optional PlanItemStatus status = 6 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  optional int64 machine_group_id = 7 [(buf.validate.field).int64.gt = 0];
+  optional int64 preferred_machine_id = 8 [(buf.validate.field).int64.gt = 0];
+  optional string notes = 9 [(buf.validate.field).string.max_len = 2000];
+  // Reason recorded in the plan-change log (required for material edits).
+  optional string change_reason = 10 [(buf.validate.field).string.max_len = 500];
+  // Setting either timeline field marks the item MANUAL; omitting both leaves
+  // the existing duration source untouched.
+  optional string planned_start_date = 11 [(buf.validate.field).string.max_len = 10];
+  optional int32 planned_duration_days = 12 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 60
+  }];
+}
+
+message UpdatePlanItemResponse {
+  common.v1.BaseResponse base = 1;
+  PlanItem data = 2;
+}
+
+message DeletePlanItemRequest {
+  int64 plan_item_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeletePlanItemResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+message ListPlanItemsRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  string month = 4 [(buf.validate.field).string.max_len = 7];
+  PlanItemType type = 5; // UNSPECIFIED = no filter.
+  PlanItemStatus status = 6; // UNSPECIFIED = no filter.
+  optional int64 machine_group_id = 7;
+  optional int64 demand_id = 8;
+  string sort_by = 9 [(buf.validate.field).string = {
+    in: [
+      "",
+      "deadline",
+      "product_code",
+      "sequence",
+      "status",
+      "created_at"
+    ]
+  }];
+  string sort_order = 10 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+message ListPlanItemsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated PlanItem data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ── Gantt view ───────────────────────────────────────────────────────────────
+
+// GanttBar is one scheduled bar on the plan timeline (Y=machine, X=days).
+message GanttBar {
+  int64 plan_item_id = 1;
+  int64 wo_id = 2; // 0 if not yet scheduled to a WO
+  int64 machine_id = 3;
+  string machine_no = 4;
+  AreaCode area = 5;
+  int64 machine_group_id = 6;
+  string product_code = 7;
+  string product_name = 8;
+  PlanItemType type = 9;
+  string qty_target = 10; // decimal-as-string
+  string start_date = 11; // ISO-8601 date
+  string end_date = 12; // ISO-8601 date
+  PlanItemStatus status = 13;
+  // True when this bar represents a changeover slot (red-dashed).
+  bool is_changeover = 14;
+  string lot_no = 15;
+}
+
+message GetGanttViewRequest {
+  string month = 1 [(buf.validate.field).string = {
+    len: 7
+    pattern: "^[0-9]{4}-[0-9]{2}$"
+  }];
+  AreaCode area = 2; // UNSPECIFIED = all areas.
+  optional int64 machine_group_id = 3;
+  // Optional explicit window (defaults to the whole month).
+  optional string from_date = 4 [(buf.validate.field).string.max_len = 10];
+  optional string to_date = 5 [(buf.validate.field).string.max_len = 10];
+}
+
+message GetGanttViewResponse {
+  common.v1.BaseResponse base = 1;
+  repeated GanttBar data = 2;
+}

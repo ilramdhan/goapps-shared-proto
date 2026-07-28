@@ -1,0 +1,400 @@
+syntax = "proto3";
+
+package ppc.v1;
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "ppc/v1/common.proto";
+
+// =============================================================================
+// Layer 1 — Production Demand + Sales Order staging (ETL inbox).
+// A demand is a business commitment; the plan/WO layers consume it.
+// Decimals are decimal-as-string.
+// =============================================================================
+
+// SalesOrderStaging is the ETL inbox row from Oracle MGT_SO_PENDING_WEB.
+// Full-replaced each sync; pulled_to_demand_id is preserved across replaces.
+message SalesOrderStaging {
+  int64 sos_id = 1;
+  string contract_no = 2;
+  string contract_date = 3; // ISO-8601 date
+  int64 contract_sys_id = 4;
+  string customer_code = 5;
+  string customer_name = 6;
+  string item_code = 7;
+  string item_desc = 8;
+  string grade_code = 9;
+  string shade_code = 10;
+  string shade_name = 11;
+  string qty_ordered = 12; // decimal-as-string
+  string qty_delivered = 13; // decimal-as-string
+  string qty_remaining = 14; // decimal-as-string
+  string deadline = 15; // ISO-8601 date
+  string ship_date = 16;
+  string merge_no = 17;
+  string term = 18;
+  string rate = 19; // decimal-as-string
+  string currency = 20;
+  string blocked_status = 21;
+  string outstanding_ar = 22; // decimal-as-string
+  string pallet_type = 23;
+  string end_use = 24;
+  string mix_flag = 25;
+  string annotation = 26;
+  string remarks = 27;
+  string etl_synced_at = 28; // ISO-8601
+  int64 pulled_to_demand_id = 29; // 0 = available in LOV; else already pulled
+
+  // Finance product resolution for (item_code, shade_code). ppc_db and
+  // finance_db are separate databases, so this is resolved over gRPC and
+  // cached on the staging row rather than joined.
+  int64 cpm_product_sys_id = 30; // 0 = unresolved
+  string cpm_product_code = 31; // decorated from finance, empty when unresolved
+  string cpm_product_name = 32; // decorated from finance, empty when unresolved
+  // UNRESOLVED | AUTO | AMBIGUOUS | NOT_FOUND | MANUAL
+  string match_status = 33;
+  // How many finance products matched at resolution time. Lets the UI say why
+  // a row is unresolved ("3 products matched") instead of only that it is.
+  int32 match_count = 34;
+}
+
+message ListSalesOrderStagingRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  string customer_code = 4 [(buf.validate.field).string.max_len = 20];
+  string item_code = 5 [(buf.validate.field).string.max_len = 30];
+  // When true, only rows not yet pulled to a demand (available in the LOV).
+  optional bool unpulled_only = 6;
+  string sort_by = 7 [(buf.validate.field).string = {
+    in: [
+      "",
+      "contract_no",
+      "customer_name",
+      "deadline",
+      "qty_remaining"
+    ]
+  }];
+  string sort_order = 8 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+message ListSalesOrderStagingResponse {
+  common.v1.BaseResponse base = 1;
+  repeated SalesOrderStaging data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ListSalesOrderStagingIds returns only the ids of the staging rows matching a
+// filter, for the LOV's "select all matching" action. The display list is
+// page-capped at 100 rows, which would silently truncate a select-all; an
+// ids-only response carries no row payload, so the whole matching set fits in
+// one round trip.
+//
+// The filter fields mirror ListSalesOrderStagingRequest exactly — the two must
+// resolve the same set or the count shown would not be the count selected.
+message ListSalesOrderStagingIdsRequest {
+  string search = 1 [(buf.validate.field).string.max_len = 100];
+  string customer_code = 2 [(buf.validate.field).string.max_len = 20];
+  string item_code = 3 [(buf.validate.field).string.max_len = 30];
+  // When true, only rows not yet pulled to a demand (available in the LOV).
+  optional bool unpulled_only = 4;
+}
+
+message ListSalesOrderStagingIdsResponse {
+  common.v1.BaseResponse base = 1;
+  // Ids actually returned, capped at the PullFromOrion batch limit (200).
+  repeated int64 sos_ids = 2;
+  // How many rows match the filter in total, before the cap. Greater than
+  // len(sos_ids) means the caller received a truncated set and must say so.
+  int64 total_matched = 3;
+  // The cap applied, so a caller never has to hard-code it.
+  int32 limit = 4;
+}
+
+// SetStagingProduct persists a planner's manual product pick onto a staging
+// row (match_status becomes MANUAL), so the next ETL resolution pass leaves the
+// row alone and the pick survives beyond the browser session.
+message SetStagingProductRequest {
+  int64 sos_id = 1 [(buf.validate.field).int64.gt = 0];
+  int64 cpm_product_sys_id = 2 [(buf.validate.field).int64.gt = 0];
+}
+
+message SetStagingProductResponse {
+  common.v1.BaseResponse base = 1;
+  SalesOrderStaging data = 2;
+}
+
+// Demand is a Layer-1 production commitment.
+message Demand {
+  int64 demand_id = 1;
+  DemandType type = 2;
+  DemandSubType sub_type = 3;
+  DemandSource source = 4;
+  CarryAction carry_action = 5;
+  int64 cpm_product_sys_id = 6; // soft ref to finance CPM
+  string product_code = 7; // denormalized for UI
+  string product_name = 8; // denormalized for UI
+  string qty_original = 9; // decimal-as-string
+  string qty_remaining = 10; // decimal-as-string
+  string deadline = 11; // ISO-8601 date
+  int64 customer_id = 12; // soft ref
+  string contract_no = 13;
+  string contract_date = 14; // ISO-8601 date
+  string stuff_advance_no = 15;
+  string incoterm = 17;
+  string lc_status = 18;
+  GradeReq grade_requirement = 19;
+  string ax_min_pct = 20; // decimal-as-string
+  string am_max_pct = 21; // decimal-as-string
+  int64 carry_from_id = 22; // self-ref to originating demand
+  int64 sos_ref = 23; // ref to sales_order_staging
+  DemandStatus status = 24;
+  string month = 25; // YYYY-MM
+  int64 confirmed_by = 26;
+  string confirmed_at = 27; // ISO-8601
+  string est_prod_needed = 28; // decimal-as-string, qty_remaining / ax_yield_pct
+  // Shade (colour) carried from the Orion staging row at pull time.
+  string shade_code = 29;
+  string shade_name = 30;
+  // Why the product is not linked yet, when status is PENDING_PRODUCT_LINK:
+  // AUTO_MATCH_FAILED | AMBIGUOUS | NO_MASTER_YET. Empty once linked.
+  string product_link_reason = 31;
+  // Orion item code of the staging row this demand was pulled from, joined
+  // from sales_order_staging via sos_ref. Empty for a manually-created demand.
+  // It is the only human-readable identity an unlinked demand has, so the UI
+  // can name the row instead of rendering a placeholder dash.
+  string orion_item_code = 32;
+  common.v1.AuditInfo audit = 16;
+}
+
+message CreateDemandRequest {
+  DemandType type = 1 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  DemandSubType sub_type = 2; // UNSPECIFIED allowed for SAMPLE
+  DemandSource source = 3 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  // Omitted for an MTS/SAMPLE demand raised before its finance master exists.
+  // The demand is then saved as PENDING_PRODUCT_LINK and linked later via
+  // MapDemandProduct; the domain refuses a missing product in any other case.
+  optional int64 cpm_product_sys_id = 4;
+  string qty_original = 5 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  string deadline = 6 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 10
+  }];
+  GradeReq grade_requirement = 7 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  optional string ax_min_pct = 8 [(buf.validate.field).string.max_len = 10];
+  optional string am_max_pct = 9 [(buf.validate.field).string.max_len = 10];
+  optional int64 sos_ref = 10 [(buf.validate.field).int64.gt = 0];
+  optional string contract_no = 11 [(buf.validate.field).string.max_len = 50];
+  optional int64 customer_id = 12 [(buf.validate.field).int64.gt = 0];
+  optional string contract_date = 13 [(buf.validate.field).string.max_len = 10];
+  optional string incoterm = 14 [(buf.validate.field).string.max_len = 10];
+  optional string lc_status = 15 [(buf.validate.field).string.max_len = 30];
+  optional string stuff_advance_no = 16 [(buf.validate.field).string.max_len = 50];
+  // Derived from deadline unless month_override is set (carry-forward only).
+  optional string month = 17 [(buf.validate.field).string = {
+    len: 7
+    pattern: "^[0-9]{4}-[0-9]{2}$"
+  }];
+  // Allows month to diverge from the deadline (carry-forward remainder).
+  bool month_override = 18;
+}
+
+message CreateDemandResponse {
+  common.v1.BaseResponse base = 1;
+  Demand data = 2;
+}
+
+message GetDemandRequest {
+  int64 demand_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetDemandResponse {
+  common.v1.BaseResponse base = 1;
+  Demand data = 2;
+}
+
+message UpdateDemandRequest {
+  int64 demand_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional string qty_original = 2 [(buf.validate.field).string.max_len = 20];
+  optional string deadline = 3 [(buf.validate.field).string.max_len = 10];
+  optional GradeReq grade_requirement = 4 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  optional string ax_min_pct = 5 [(buf.validate.field).string.max_len = 10];
+  optional string am_max_pct = 6 [(buf.validate.field).string.max_len = 10];
+  optional string contract_no = 7 [(buf.validate.field).string.max_len = 50];
+  optional string incoterm = 8 [(buf.validate.field).string.max_len = 10];
+  optional string lc_status = 9 [(buf.validate.field).string.max_len = 30];
+  optional string stuff_advance_no = 10 [(buf.validate.field).string.max_len = 50];
+}
+
+message UpdateDemandResponse {
+  common.v1.BaseResponse base = 1;
+  Demand data = 2;
+}
+
+// MapDemandProduct maps a product onto a demand with no product yet mapped
+// (e.g. an Orion-pulled demand). Rejected if the demand is already mapped.
+message MapDemandProductRequest {
+  int64 demand_id = 1 [(buf.validate.field).int64.gt = 0];
+  int64 cpm_product_sys_id = 2 [(buf.validate.field).int64.gt = 0];
+}
+
+message MapDemandProductResponse {
+  common.v1.BaseResponse base = 1;
+  Demand data = 2;
+}
+
+message DeleteDemandRequest {
+  int64 demand_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeleteDemandResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+message ListDemandsRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  DemandType type = 4; // UNSPECIFIED = no filter.
+  DemandStatus status = 5; // UNSPECIFIED = no filter.
+  string month = 6 [(buf.validate.field).string.max_len = 7];
+  optional int64 cpm_product_sys_id = 7;
+  string sort_by = 8 [(buf.validate.field).string = {
+    in: [
+      "",
+      "deadline",
+      "product_code",
+      "qty_remaining",
+      "status",
+      "created_at"
+    ]
+  }];
+  string sort_order = 9 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+  // When true, hides demands that already have at least one plan item. Opt-in
+  // only: the plan-item dialog sets it so a planner cannot double-plan a
+  // demand, while the demand list itself keeps showing everything.
+  optional bool without_plan = 10;
+}
+
+message ListDemandsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated Demand data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ConfirmDemand moves a demand from PENDING_CONFIRMATION to CONFIRMED.
+message ConfirmDemandRequest {
+  int64 demand_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message ConfirmDemandResponse {
+  common.v1.BaseResponse base = 1;
+  Demand data = 2;
+}
+
+// PullFromOrion creates demands from selected SO staging rows (LOV pattern).
+message PullFromOrionRequest {
+  repeated int64 sos_ids = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 200
+  }];
+  string month = 2 [(buf.validate.field).string = {
+    len: 7
+    pattern: "^[0-9]{4}-[0-9]{2}$"
+  }];
+  DemandSubType sub_type = 3; // classification applied to all pulled demands
+}
+
+message PullFromOrionResponse {
+  common.v1.BaseResponse base = 1;
+  repeated Demand data = 2;
+  int32 created_count = 3;
+}
+
+// ProcessCarryForward executes a per-demand carry-forward action at month start.
+message CarryForwardSplit {
+  string qty = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  string deadline = 2 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 10
+  }];
+}
+
+message ProcessCarryForwardRequest {
+  int64 source_demand_id = 1 [(buf.validate.field).int64.gt = 0];
+  CarryAction action = 2 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  string target_month = 3 [(buf.validate.field).string = {
+    len: 7
+    pattern: "^[0-9]{4}-[0-9]{2}$"
+  }];
+  // New deadline for CARRY_AS_IS / PARTIAL_CARRY.
+  optional string new_deadline = 4 [(buf.validate.field).string.max_len = 10];
+  // Carried qty for PARTIAL_CARRY.
+  optional string carry_qty = 5 [(buf.validate.field).string.max_len = 20];
+  // Split children for SPLIT (sum of qty must be <= source remaining).
+  repeated CarryForwardSplit splits = 6 [(buf.validate.field).repeated.max_items = 50];
+}
+
+message ProcessCarryForwardResponse {
+  common.v1.BaseResponse base = 1;
+  repeated Demand data = 2; // resulting new demand(s)
+}
+
+// ListCarryForwardCandidates returns demands eligible for carry-forward.
+message ListCarryForwardCandidatesRequest {
+  string source_month = 1 [(buf.validate.field).string = {
+    len: 7
+    pattern: "^[0-9]{4}-[0-9]{2}$"
+  }];
+}
+
+message ListCarryForwardCandidatesResponse {
+  common.v1.BaseResponse base = 1;
+  repeated Demand data = 2;
+}
+
+// ApproveMTSDemand is the Marketing approval for an MTS demand request.
+message ApproveMTSDemandRequest {
+  int64 demand_id = 1 [(buf.validate.field).int64.gt = 0];
+  bool approved = 2;
+  optional string note = 3 [(buf.validate.field).string.max_len = 500];
+}
+
+message ApproveMTSDemandResponse {
+  common.v1.BaseResponse base = 1;
+  Demand data = 2;
+}

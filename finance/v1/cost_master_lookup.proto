@@ -1,0 +1,341 @@
+syntax = "proto3";
+
+package finance.v1;
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "google/api/annotations.proto";
+
+// =============================================================================
+// CostMasterLookupService — ADDITIVE, read-only master lookups for consumers
+// that reference finance masters by soft *_sys_id references over gRPC
+// (e.g. the PPC service, per decision D1). No existing finance message, field,
+// RPC, or service is modified — this file adds only new types + a new service.
+//
+// Denier note (Gap G-005): cost_product_master has NO denier column. The
+// theoretical-efficiency denier stopgap lives in ppc_product_config. The
+// product_denier field below is therefore reserved in the contract but returned
+// EMPTY until a denier source exists on the finance side.
+// =============================================================================
+
+// CostMasterProduct is the lightweight product projection returned to PPC.
+// Values mirror cost_product_master; decimals are transported as strings.
+message CostMasterProduct {
+  int64 product_sys_id = 1;
+  string product_code = 2;
+  int32 product_type_id = 3;
+  string product_type_code = 4;
+  string product_type_name = 5;
+  string product_name = 6;
+  string shade_code = 7;
+  string shade_name = 8;
+  string grade_code = 9;
+  string erp_item_code = 10;
+  string erp_grade_code_1 = 11;
+  string erp_grade_code_2 = 12;
+  bool is_active = 13;
+  // Denier — EMPTY for now (Gap G-005: no denier on cost_product_master).
+  string product_denier = 14;
+}
+
+// GetCostProductMasterForPPC returns one product projection by sys id.
+message GetCostProductMasterForPPCRequest {
+  int64 product_sys_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetCostProductMasterForPPCResponse {
+  common.v1.BaseResponse base = 1;
+  CostMasterProduct data = 2;
+}
+
+// BatchGetCostProductMaster resolves many product sys ids at once (used at
+// write time to validate + denormalize soft references).
+message BatchGetCostProductMasterRequest {
+  repeated int64 product_sys_ids = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 500
+  }];
+}
+
+message BatchGetCostProductMasterResponse {
+  common.v1.BaseResponse base = 1;
+  repeated CostMasterProduct data = 2;
+}
+
+// ErpCodePair is one (erp_item_code, shade_code) lookup key. Matching is
+// trimmed + case-insensitive on both components; shade_code may be empty.
+message ErpCodePair {
+  string erp_item_code = 1 [(buf.validate.field).string.max_len = 50];
+  string shade_code = 2 [(buf.validate.field).string.max_len = 50];
+}
+
+// ResolveCostProductMasterByErpCode resolves ERP item/shade code pairs to CPM
+// products. Used by PPC to link Orion sales-order staging rows to finance
+// product masters (the two services own separate databases, so no SQL join is
+// available).
+message ResolveCostProductMasterByErpCodeRequest {
+  repeated ErpCodePair pairs = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 500
+  }];
+}
+
+// ErpCodeResolution is the outcome for one requested pair.
+message ErpCodeResolution {
+  ErpCodePair pair = 1;
+  // 0 = no match, 1 = unique match, >=2 = ambiguous.
+  int32 match_count = 2;
+  // Populated only when match_count == 1.
+  CostMasterProduct product = 3;
+}
+
+message ResolveCostProductMasterByErpCodeResponse {
+  common.v1.BaseResponse base = 1;
+  repeated ErpCodeResolution resolutions = 2;
+}
+
+// ListCostProductMasterForPPC is a paginated lookup projection for PPC pickers.
+message ListCostProductMasterForPPCRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 200
+  }];
+  string search = 3 [(buf.validate.field).string.max_len = 200];
+  int32 product_type_id = 4;
+  string shade_code = 5 [(buf.validate.field).string.max_len = 50];
+  // Empty = all; otherwise filter by active/inactive.
+  string active_filter = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "all",
+      "active",
+      "inactive"
+    ]
+  }];
+}
+
+message ListCostProductMasterForPPCResponse {
+  common.v1.BaseResponse base = 1;
+  repeated CostMasterProduct data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// CostMasterRouteRm is a lightweight RM edge projection for a route stage.
+message CostMasterRouteRm {
+  int64 rm_id = 1;
+  int64 seq_id = 2;
+  string rm_type = 3; // PRODUCT / ITEM / GROUP
+  int64 rm_product_sys_id = 4;
+  string rm_item_code = 5;
+  string rm_group_code = 6;
+  string route_rm_ratio = 7; // decimal-as-string
+  string sub_type = 8;
+}
+
+// CostMasterRouteStage is a lightweight route stage projection.
+message CostMasterRouteStage {
+  int64 seq_id = 1;
+  int32 route_level = 2;
+  int32 route_seq = 3;
+  string route_name = 4;
+  string route_item_code = 5;
+  string route_shade_code = 6;
+  repeated CostMasterRouteRm rms = 7;
+  // The product this stage produces (cost_route_seq.crs_product_sys_id).
+  // Required to walk a flattened multi-level route: it is what ties a stage's
+  // RM edges to the downstream product they feed.
+  int64 stage_product_sys_id = 8;
+}
+
+// CostMasterRoute is the released route projection for a product.
+message CostMasterRoute {
+  int64 head_id = 1;
+  int64 product_sys_id = 2;
+  string product_code = 3;
+  string routing_status = 4;
+  int32 version = 5;
+  repeated CostMasterRouteStage stages = 6;
+}
+
+// GetProductRouteForPPC returns the released route projection for a product.
+message GetProductRouteForPPCRequest {
+  int64 product_sys_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetProductRouteForPPCResponse {
+  common.v1.BaseResponse base = 1;
+  CostMasterRoute data = 2;
+}
+
+// CostMasterGrade is a lightweight product-grade projection.
+message CostMasterGrade {
+  string pg_id = 1;
+  string pg_code = 2;
+  string pg_name = 3;
+  string pg_grade_label = 4;
+  bool is_active = 5;
+}
+
+// ListProductGradesForPPC lists product grades for PPC pickers.
+message ListProductGradesForPPCRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 200
+  }];
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  // Empty = all; otherwise filter by active/inactive.
+  string active_filter = 4 [(buf.validate.field).string = {
+    in: [
+      "",
+      "all",
+      "active",
+      "inactive"
+    ]
+  }];
+}
+
+message ListProductGradesForPPCResponse {
+  common.v1.BaseResponse base = 1;
+  repeated CostMasterGrade data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// =============================================================================
+// Product-parameter lookups (v1.2) — mst_parameter definitions +
+// cost_product_parameter per-product typed values. Consumed by PPC to
+// materialize WO_PARAMETER rows and to resolve the WO parameter chain
+// (WO-ref -> product+machine -> product -> default). Typed values follow the
+// cost_product_parameter convention: numeric/text as string, flag as bool.
+// =============================================================================
+
+// CostMasterProductParameterDef is an mst_parameter definition projected for
+// PPC. display_group selects the WO parameter set (e.g. "Machine").
+message CostMasterProductParameterDef {
+  string param_id = 1; // UUID
+  string param_code = 2;
+  string param_name = 3;
+  string param_short_name = 4;
+  string data_type = 5; // NUMBER / TEXT / BOOLEAN
+  string param_category = 6; // INPUT / RATE / CALCULATED / MASTER_LOOKUP
+  string display_group = 7; // Spec / Machine / Grade / Packing / Cost / ...
+  string lookup_master_code = 8; // enum combobox source (e.g. YARN_TYPE)
+  string uom_id = 9; // UUID; empty if none
+  string uom_code = 10; // resolved from mst_uom join
+  string default_value = 11; // decimal-as-string (fallback layer 4)
+  string min_value = 12; // decimal-as-string
+  string max_value = 13; // decimal-as-string
+  int32 display_order = 14;
+  bool is_required_for_costing = 15;
+  bool is_active = 16;
+}
+
+// ListProductParametersForPPC lists mst_parameter definitions, filterable by
+// display_group (the WO parameter selector).
+message ListProductParametersForPPCRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 200
+  }];
+  string search = 3 [(buf.validate.field).string.max_len = 200];
+  // Filter by display_group (e.g. "Machine"). Empty = all groups.
+  string display_group = 4 [(buf.validate.field).string.max_len = 50];
+  // Empty = all; otherwise filter by active/inactive.
+  string active_filter = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "all",
+      "active",
+      "inactive"
+    ]
+  }];
+}
+
+message ListProductParametersForPPCResponse {
+  common.v1.BaseResponse base = 1;
+  repeated CostMasterProductParameterDef data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// CostMasterProductParameterValue is one cost_product_parameter row (a per-
+// product typed value). Exactly one of value_numeric/value_text/value_flag is
+// meaningful per the referenced param's data_type.
+message CostMasterProductParameterValue {
+  int64 product_sys_id = 1;
+  string param_id = 2; // UUID
+  string param_code = 3;
+  string data_type = 4; // NUMBER / TEXT / BOOLEAN
+  string value_numeric = 5; // decimal-as-string
+  string value_text = 6;
+  bool value_flag = 7;
+}
+
+// BatchGetProductParameterValues returns cost_product_parameter values for a
+// set of products (optionally narrowed to specific params). Used by PPC to
+// resolve the product layer of the WO parameter chain.
+message BatchGetProductParameterValuesRequest {
+  repeated int64 product_sys_ids = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 500
+  }];
+  // Optional param filter (UUIDs). Empty = all params for the products.
+  repeated string param_ids = 2 [(buf.validate.field).repeated = {
+    max_items: 500
+    items: {
+      string: {uuid: true}
+    }
+  }];
+}
+
+message BatchGetProductParameterValuesResponse {
+  common.v1.BaseResponse base = 1;
+  repeated CostMasterProductParameterValue data = 2;
+}
+
+// CostMasterLookupService exposes read-only finance master projections.
+service CostMasterLookupService {
+  // GetCostProductMasterForPPC returns one product projection by sys id.
+  rpc GetCostProductMasterForPPC(GetCostProductMasterForPPCRequest) returns (GetCostProductMasterForPPCResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/lookup/products/{product_sys_id}"};
+  }
+  // BatchGetCostProductMaster resolves many product sys ids at once.
+  rpc BatchGetCostProductMaster(BatchGetCostProductMasterRequest) returns (BatchGetCostProductMasterResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/lookup/products/batch"
+      body: "*"
+    };
+  }
+  // ResolveCostProductMasterByErpCode resolves (erp_item_code, shade_code)
+  // pairs to product projections, reporting ambiguity explicitly.
+  rpc ResolveCostProductMasterByErpCode(ResolveCostProductMasterByErpCodeRequest) returns (ResolveCostProductMasterByErpCodeResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/cost-product-masters/resolve-by-erp-code"
+      body: "*"
+    };
+  }
+  // ListCostProductMasterForPPC lists product projections for pickers.
+  rpc ListCostProductMasterForPPC(ListCostProductMasterForPPCRequest) returns (ListCostProductMasterForPPCResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/lookup/products"};
+  }
+  // GetProductRouteForPPC returns the released route projection for a product.
+  rpc GetProductRouteForPPC(GetProductRouteForPPCRequest) returns (GetProductRouteForPPCResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/lookup/routes/{product_sys_id}"};
+  }
+  // ListProductGradesForPPC lists product-grade projections for pickers.
+  rpc ListProductGradesForPPC(ListProductGradesForPPCRequest) returns (ListProductGradesForPPCResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/lookup/grades"};
+  }
+  // ListProductParametersForPPC lists mst_parameter definitions (by display_group).
+  rpc ListProductParametersForPPC(ListProductParametersForPPCRequest) returns (ListProductParametersForPPCResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/lookup/product-parameters"};
+  }
+  // BatchGetProductParameterValues returns per-product typed param values.
+  rpc BatchGetProductParameterValues(BatchGetProductParameterValuesRequest) returns (BatchGetProductParameterValuesResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/lookup/product-parameters/values/batch"
+      body: "*"
+    };
+  }
+}

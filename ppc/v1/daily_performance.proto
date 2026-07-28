@@ -1,0 +1,393 @@
+syntax = "proto3";
+
+package ppc.v1;
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "ppc/v1/common.proto";
+
+// =============================================================================
+// Daily Performance (v1.1) — shift entry, downtime, waste, efficiency snapshot.
+// The PPC service is the efficiency calculation engine (formula moved out of
+// Excel). Decimals are decimal-as-string.
+// =============================================================================
+
+// MachineShiftLog is the operator machine-level shift entry.
+// v1.2: running_minutes is DERIVED from downtime (not typed by the operator);
+// the log-book note moved to ShiftLogNote (two types: INSTRUKSI / ACTIVITY).
+message MachineShiftLog {
+  int64 log_id = 1;
+  int64 machine_id = 2;
+  string machine_no = 3; // denormalized for UI
+  string date = 4; // ISO-8601 date
+  string shift = 5; // 1 / 2 / 3
+  int32 positions_total = 6;
+  string positions_running = 7; // decimal-as-string (may be fractional)
+  int32 running_minutes = 8; // DERIVED from downtime (v1.2)
+  reserved 9; // was activity_note (v1.1) -> ShiftLogNote
+  reserved "activity_note";
+  string status = 10; // DRAFT / FINAL (no approval gate)
+  int64 input_by = 11;
+  string input_at = 12; // ISO-8601
+  string updated_at = 13; // ISO-8601
+}
+
+// ShiftLogNote is a log-book note per machine per shift (v1.2), replacing
+// machine_shift_log.activity_note. Two types: INSTRUKSI (handover) / ACTIVITY.
+message ShiftLogNote {
+  int64 note_id = 1;
+  int64 machine_id = 2;
+  string machine_no = 3; // denormalized for UI
+  string date = 4; // ISO-8601 date
+  string shift = 5; // 1 / 2 / 3
+  ShiftLogNoteType note_type = 6; // INSTRUKSI / ACTIVITY
+  string note = 7;
+  int64 input_by = 8;
+  string input_at = 9; // ISO-8601
+}
+
+// AreaShiftLog is the department-level shift entry (OT hours, notes).
+message AreaShiftLog {
+  int64 log_id = 1;
+  AreaCode area = 2;
+  string date = 3; // ISO-8601 date
+  string shift = 4; // 1 / 2 / 3; empty = daily
+  string ot_hours = 5; // decimal-as-string
+  string notes = 6;
+  int64 input_by = 7;
+  string input_at = 8; // ISO-8601
+}
+
+// DowntimeEvent is an idle/downtime occurrence on a machine.
+message DowntimeEvent {
+  int64 event_id = 1;
+  int64 machine_id = 2;
+  string machine_no = 3; // denormalized for UI
+  int64 wo_id = 4;
+  int64 shift_log_id = 5;
+  int64 ce_id = 6; // changeover ref to avoid double counting
+  string date = 7; // ISO-8601 date
+  string shift = 8;
+  string position_no = 9;
+  int64 reason_id = 10;
+  string reason_code = 11; // denormalized for UI
+  string start_at = 12; // ISO-8601
+  string end_at = 13; // ISO-8601
+  int32 duration_min = 14;
+  string lost_kg = 15; // decimal-as-string, auto from theoretical rate, editable
+  string notes = 17;
+  int64 input_by = 18;
+  string input_at = 19; // ISO-8601
+}
+
+// WasteActual is a waste/downgrade quantity recorded per shift.
+message WasteActual {
+  int64 waste_id = 1;
+  AreaCode area = 2;
+  int64 machine_id = 3;
+  int64 wo_id = 4;
+  int64 shift_log_id = 5;
+  string date = 6; // ISO-8601 date
+  string shift = 7;
+  int64 category_id = 8;
+  string category_code = 9; // denormalized for UI
+  string qty_kg = 10; // decimal-as-string
+  bool is_upset = 11;
+  string notes = 12;
+  int64 input_by = 13;
+  string input_at = 14; // ISO-8601
+}
+
+// EfficiencySnapshot is a computed efficiency roll-up (dashboard basis).
+message EfficiencySnapshot {
+  int64 snapshot_id = 1;
+  AreaCode area = 2;
+  string scope = 3; // MACHINE_SHIFT / MACHINE_DAY / AREA_DAY
+  int64 machine_id = 4;
+  int64 wo_id = 5;
+  string date = 6; // ISO-8601 date
+  string shift = 7;
+  string segment = 8; // DTY / ACY / ATY / POY
+  bool is_excluding = 9;
+  string qty_theoretical_100 = 10; // decimal-as-string
+  string qty_theoretical_rng = 11; // decimal-as-string
+  string qty_loss = 12; // decimal-as-string
+  string qty_waste = 13; // decimal-as-string
+  string qty_actual = 14; // decimal-as-string
+  string eff_production_pct = 15; // decimal-as-string
+  string eff_running_pct = 17; // decimal-as-string
+  string eff_plant_pct = 18; // decimal-as-string (SPG)
+  string yield_pct = 19; // decimal-as-string (SPG)
+  string waste_pct = 20; // decimal-as-string
+  int32 breaks_count = 21;
+  string breaks_per_ton = 22; // decimal-as-string
+  string calc_at = 23; // ISO-8601
+}
+
+// ── Shift entry submission ───────────────────────────────────────────────────
+
+// DowntimeEntry is one downtime line in a shift submission.
+message DowntimeEntry {
+  int64 reason_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional string position_no = 2 [(buf.validate.field).string.max_len = 10];
+  optional int64 wo_id = 3 [(buf.validate.field).int64.gt = 0];
+  optional string start_at = 4 [(buf.validate.field).string.max_len = 30];
+  optional string end_at = 5 [(buf.validate.field).string.max_len = 30];
+  optional int32 duration_min = 6 [(buf.validate.field).int32.gte = 0];
+  optional string lost_kg = 7 [(buf.validate.field).string.max_len = 20];
+  optional string notes = 8 [(buf.validate.field).string.max_len = 500];
+}
+
+// WasteEntry is one waste line in a shift submission.
+message WasteEntry {
+  int64 category_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional int64 wo_id = 2 [(buf.validate.field).int64.gt = 0];
+  string qty_kg = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  bool is_upset = 4;
+  optional string notes = 5 [(buf.validate.field).string.max_len = 500];
+}
+
+// SubmitShiftEntry submits a machine shift log plus its downtime/waste lines
+// in one call (the two-part shift entry form).
+message SubmitShiftEntryRequest {
+  int64 machine_id = 1 [(buf.validate.field).int64.gt = 0];
+  string date = 2 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 10
+  }];
+  string shift = 3 [(buf.validate.field).string = {
+    len: 1
+    pattern: "^[1-3]$"
+  }];
+  int32 positions_total = 4 [(buf.validate.field).int32.gte = 0];
+  string positions_running = 5 [(buf.validate.field).string.max_len = 20];
+  // v1.2: running_minutes is derived from downtime server-side; if provided it
+  // is treated as a hint/override only.
+  int32 running_minutes = 6 [(buf.validate.field).int32.gte = 0];
+  reserved 7; // was activity_note (v1.1) -> SubmitShiftLogNote
+  reserved "activity_note";
+  // FINAL triggers efficiency recompute; DRAFT saves without recompute.
+  string status = 8 [(buf.validate.field).string = {
+    in: [
+      "DRAFT",
+      "FINAL"
+    ]
+  }];
+  repeated DowntimeEntry downtime_entries = 9 [(buf.validate.field).repeated.max_items = 100];
+  repeated WasteEntry waste_entries = 10 [(buf.validate.field).repeated.max_items = 100];
+}
+
+message SubmitShiftEntryResponse {
+  common.v1.BaseResponse base = 1;
+  MachineShiftLog data = 2;
+}
+
+// SubmitAreaShiftLog records area-level shift data (OT hours, notes).
+message SubmitAreaShiftLogRequest {
+  AreaCode area = 1 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  string date = 2 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 10
+  }];
+  optional string shift = 3 [(buf.validate.field).string.max_len = 1];
+  optional string ot_hours = 4 [(buf.validate.field).string.max_len = 20];
+  optional string notes = 5 [(buf.validate.field).string.max_len = 2000];
+}
+
+message SubmitAreaShiftLogResponse {
+  common.v1.BaseResponse base = 1;
+  AreaShiftLog data = 2;
+}
+
+message ListMachineShiftLogsRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  optional int64 machine_id = 3;
+  AreaCode area = 4;
+  string date = 5 [(buf.validate.field).string.max_len = 10];
+  string shift = 6 [(buf.validate.field).string.max_len = 1];
+  string status = 7 [(buf.validate.field).string = {
+    in: [
+      "",
+      "DRAFT",
+      "FINAL"
+    ]
+  }];
+  string sort_by = 8 [(buf.validate.field).string = {
+    in: [
+      "",
+      "date",
+      "machine_no",
+      "shift"
+    ]
+  }];
+  string sort_order = 9 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+message ListMachineShiftLogsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated MachineShiftLog data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// RecalcEfficiency triggers an efficiency snapshot recompute for a scope/date.
+message RecalcEfficiencyRequest {
+  AreaCode area = 1 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  string date = 2 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 10
+  }];
+  optional int64 machine_id = 3 [(buf.validate.field).int64.gt = 0];
+  optional string shift = 4 [(buf.validate.field).string.max_len = 1];
+}
+
+message RecalcEfficiencyResponse {
+  common.v1.BaseResponse base = 1;
+  int32 snapshots_written = 2;
+}
+
+message ListEfficiencySnapshotsRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  AreaCode area = 3; // UNSPECIFIED = no filter.
+  string scope = 4 [(buf.validate.field).string = {
+    in: [
+      "",
+      "MACHINE_SHIFT",
+      "MACHINE_DAY",
+      "AREA_DAY"
+    ]
+  }];
+  optional int64 machine_id = 5;
+  string date_from = 6 [(buf.validate.field).string.max_len = 10];
+  string date_to = 7 [(buf.validate.field).string.max_len = 10];
+  string sort_by = 8 [(buf.validate.field).string = {
+    in: [
+      "",
+      "date",
+      "machine_id",
+      "scope"
+    ]
+  }];
+  string sort_order = 9 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+message ListEfficiencySnapshotsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated EfficiencySnapshot data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ── Shift log note (INSTRUKSI / ACTIVITY) ────────────────────────────────────
+
+message CreateShiftLogNoteRequest {
+  int64 machine_id = 1 [(buf.validate.field).int64.gt = 0];
+  string date = 2 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 10
+  }];
+  string shift = 3 [(buf.validate.field).string = {
+    len: 1
+    pattern: "^[1-3]$"
+  }];
+  ShiftLogNoteType note_type = 4 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  string note = 5 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 4000
+  }];
+}
+
+message CreateShiftLogNoteResponse {
+  common.v1.BaseResponse base = 1;
+  ShiftLogNote data = 2;
+}
+
+message GetShiftLogNoteRequest {
+  int64 note_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetShiftLogNoteResponse {
+  common.v1.BaseResponse base = 1;
+  ShiftLogNote data = 2;
+}
+
+message UpdateShiftLogNoteRequest {
+  int64 note_id = 1 [(buf.validate.field).int64.gt = 0];
+  optional ShiftLogNoteType note_type = 2 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  optional string note = 3 [(buf.validate.field).string.max_len = 4000];
+}
+
+message UpdateShiftLogNoteResponse {
+  common.v1.BaseResponse base = 1;
+  ShiftLogNote data = 2;
+}
+
+message DeleteShiftLogNoteRequest {
+  int64 note_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeleteShiftLogNoteResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+message ListShiftLogNotesRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  optional int64 machine_id = 3;
+  string date = 4 [(buf.validate.field).string.max_len = 10];
+  string shift = 5 [(buf.validate.field).string.max_len = 1];
+  ShiftLogNoteType note_type = 6; // UNSPECIFIED = no filter.
+  string sort_by = 7 [(buf.validate.field).string = {
+    in: [
+      "",
+      "date",
+      "machine_no",
+      "shift"
+    ]
+  }];
+  string sort_order = 8 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+message ListShiftLogNotesResponse {
+  common.v1.BaseResponse base = 1;
+  repeated ShiftLogNote data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}

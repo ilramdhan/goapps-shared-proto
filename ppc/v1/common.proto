@@ -1,0 +1,202 @@
+syntax = "proto3";
+
+package ppc.v1;
+
+// =============================================================================
+// PPC (Production Planning & Control) shared enums.
+//
+// Response envelope (BaseResponse / PaginationResponse) is reused from
+// common/v1/common.proto per the platform contract — NOT redefined here.
+// Decimal / money / qty values are transported as strings (decimal-as-string)
+// to avoid float precision loss; validated numerically in the application layer.
+// =============================================================================
+
+// AreaCode identifies the production area a machine / work order belongs to.
+enum AreaCode {
+  AREA_CODE_UNSPECIFIED = 0; // Default / no-filter.
+  AREA_CODE_TXT = 1; // Texturizing (DTY/ACY/ATY).
+  AREA_CODE_SPG = 2; // Spinning (POY).
+  AREA_CODE_TWT = 3; // Twisting.
+}
+
+// DemandType is the top-level classification of a production demand.
+enum DemandType {
+  DEMAND_TYPE_UNSPECIFIED = 0; // Default / no-filter.
+  DEMAND_TYPE_CONTRACT = 1; // Customer contract commitment.
+  DEMAND_TYPE_MTS = 2; // Make-to-stock (no specific order).
+  DEMAND_TYPE_SAMPLE = 3; // Sample / development order.
+}
+
+// DemandSubType further classifies a demand within its type.
+enum DemandSubType {
+  DEMAND_SUB_TYPE_UNSPECIFIED = 0; // Default / none.
+  DEMAND_SUB_TYPE_CF_EXPORT = 1; // Carry-forward export from a prior month.
+  DEMAND_SUB_TYPE_NEW_EXPORT = 2; // New export booking this month.
+  DEMAND_SUB_TYPE_LOCAL = 3; // Local order.
+  DEMAND_SUB_TYPE_INTERNAL = 4; // Internal (MTS).
+}
+
+// DemandSource records how a demand entered the system.
+enum DemandSource {
+  DEMAND_SOURCE_UNSPECIFIED = 0; // Default / no-filter.
+  DEMAND_SOURCE_ORION_PULL = 1; // Pulled from Orion SO staging (LOV).
+  DEMAND_SOURCE_MANUAL = 2; // Manually entered by PPC.
+  DEMAND_SOURCE_MTS_APPROVED = 3; // Created after Marketing approves an MTS request.
+  DEMAND_SOURCE_CARRY_FORWARD = 4; // Created by the start-new-month carry-forward workflow.
+}
+
+// DemandStatus is the lifecycle state of a demand.
+enum DemandStatus {
+  DEMAND_STATUS_UNSPECIFIED = 0; // Default / no-filter.
+  DEMAND_STATUS_PENDING_CONFIRMATION = 1; // Awaiting PPC confirm.
+  DEMAND_STATUS_CONFIRMED = 2; // Confirmed by PPC.
+  DEMAND_STATUS_IN_PRODUCTION = 3; // At least one WO created.
+  DEMAND_STATUS_PARTIAL = 4; // Partially fulfilled.
+  DEMAND_STATUS_FULFILLED = 5; // Fully fulfilled.
+  DEMAND_STATUS_CANCELLED = 6; // Cancelled.
+  DEMAND_STATUS_CARRIED_OVER = 7; // Carried to a new month via carry-forward.
+  DEMAND_STATUS_DEFERRED = 8; // Pushed to next month at customer request.
+  DEMAND_STATUS_SPLIT = 9; // Split into N new demands.
+  DEMAND_STATUS_PENDING_PRODUCT_LINK = 10; // Saved without a product; awaiting a manual link.
+}
+
+// CarryAction is the per-demand decision in the start-new-month workflow.
+enum CarryAction {
+  CARRY_ACTION_UNSPECIFIED = 0; // Default / none.
+  CARRY_ACTION_CARRY_AS_IS = 1; // New demand qty = remaining.
+  CARRY_ACTION_SPLIT = 2; // Split into N new demands (sum <= remaining).
+  CARRY_ACTION_DEFER = 3; // Push to next month.
+  CARRY_ACTION_PARTIAL_CARRY = 4; // Carry part, cancel the rest.
+  CARRY_ACTION_CANCEL = 5; // Close the demand.
+}
+
+// GradeReq expresses the grade requirement attached to a demand.
+enum GradeReq {
+  GRADE_REQ_UNSPECIFIED = 0; // Default / no-filter.
+  GRADE_REQ_AX_ONLY = 1; // Customer accepts grade AX only.
+  GRADE_REQ_AX_AM_CLAUSE = 2; // AX plus a bounded AM fraction (ax_min/am_max).
+  GRADE_REQ_NONE = 3; // No specific grade requirement.
+}
+
+// PlanItemType classifies a production plan item.
+enum PlanItemType {
+  PLAN_ITEM_TYPE_UNSPECIFIED = 0; // Default / no-filter.
+  PLAN_ITEM_TYPE_FG_DELIVERY = 1; // Finished-good delivery item (from a demand).
+  PLAN_ITEM_TYPE_INTERMEDIATE = 2; // Intermediate item (cascaded from a parent FG).
+  PLAN_ITEM_TYPE_MTS = 3; // Make-to-stock item.
+}
+
+// PlanItemStatus is the lifecycle state of a plan item.
+enum PlanItemStatus {
+  PLAN_ITEM_STATUS_UNSPECIFIED = 0; // Default / no-filter.
+  PLAN_ITEM_STATUS_DRAFT = 1; // Newly created, not yet active.
+  PLAN_ITEM_STATUS_ACTIVE = 2; // Part of the living monthly plan.
+  PLAN_ITEM_STATUS_IN_PRODUCTION = 3; // At least one WO created from this item.
+  PLAN_ITEM_STATUS_COMPLETED = 4; // Fulfilled.
+  PLAN_ITEM_STATUS_CANCELLED = 5; // Cancelled.
+}
+
+// WOStatus is the work-order lifecycle state.
+enum WOStatus {
+  WO_STATUS_UNSPECIFIED = 0; // Default / no-filter.
+  WO_STATUS_DRAFT = 1; // Being drafted by PPC.
+  WO_STATUS_SUBMITTED = 2; // Submitted for sequential PC->PM approval.
+  WO_STATUS_APPROVED = 3; // Both PC and PM approved (PM after PC).
+  WO_STATUS_SCHEDULED = 4; // Scheduled on the machine timeline.
+  WO_STATUS_CHANGEOVER = 5; // Machine in changeover before this WO.
+  WO_STATUS_RUNNING = 6; // Production running.
+  WO_STATUS_COMPLETED = 7; // Production complete.
+  WO_STATUS_CLOSED = 8; // Closed (final qty locked).
+  WO_STATUS_REJECTED = 9; // Rejected back to PPC.
+  WO_STATUS_PC_APPROVED = 10; // PC approved (PC values confirmed); awaiting PM (sequential, v1.2).
+  WO_STATUS_CANCELLED = 11; // Cancelled/revoked with a reason (v1.2).
+}
+
+// WORefType is how a WO references a prior WO (v1.2 WO Reference).
+enum WORefType {
+  WO_REF_TYPE_UNSPECIFIED = 0; // No reference.
+  WO_REF_TYPE_TEMPLATE = 1; // Duplicate: soft copy of PPC params, new lot, no binding.
+  WO_REF_TYPE_CONTINUATION = 2; // Continuation: hard link inheriting demand + params.
+}
+
+// ProdCategory classifies a WO for Including/Excluding efficiency slicing.
+enum ProdCategory {
+  PROD_CATEGORY_UNSPECIFIED = 0; // Default (treated as NORMAL).
+  PROD_CATEGORY_NORMAL = 1; // Normal production (counted in Excluding headline).
+  PROD_CATEGORY_B_TO_B = 2; // Back-to-back (excluded from headline eff).
+  PROD_CATEGORY_APQ = 3; // APQ (excluded).
+  PROD_CATEGORY_TRIAL = 4; // Trial (excluded).
+  PROD_CATEGORY_SMALL_LOT = 5; // Small lot (excluded).
+}
+
+// ShiftLogNoteType is the log-book note type (legacy PTMAL_ INSTRUKSI/ACTIVITY).
+enum ShiftLogNoteType {
+  SHIFT_LOG_NOTE_TYPE_UNSPECIFIED = 0; // Default / no-filter.
+  SHIFT_LOG_NOTE_TYPE_INSTRUKSI = 1; // Shift handover instruction.
+  SHIFT_LOG_NOTE_TYPE_ACTIVITY = 2; // Activity log entry.
+}
+
+// QtyAxisSource records how wo_production_actual.qty_actual was derived on the
+// audit axis (v1.2 two-axis model). BOBBIN = default from ETL bobbin scan;
+// ADJUSTED = operator-corrected (delta vs qty_bobbin is the audit signal).
+enum QtyAxisSource {
+  QTY_AXIS_SOURCE_UNSPECIFIED = 0; // Default / none.
+  QTY_AXIS_SOURCE_BOBBIN = 1; // From immutable ETL bobbin baseline.
+  QTY_AXIS_SOURCE_ADJUSTED = 2; // Operator-adjusted (owns the number).
+}
+
+// RMSource is the raw-material sourcing mode.
+enum RMSource {
+  RM_SOURCE_UNSPECIFIED = 0; // Default / none.
+  RM_SOURCE_STORE = 1; // From store stock.
+  RM_SOURCE_CAPTIVE = 2; // Captive (self-produced) RM.
+  RM_SOURCE_MIXED = 3; // Mixed store + captive.
+}
+
+// QtySource records how wo_production_actual.calculated_qty_kg was derived.
+// The suggest priority chain (spec §6) resolves to one of these values;
+// MANUAL_OVERRIDE always wins and is preserved by ETL.
+enum QtySource {
+  QTY_SOURCE_UNSPECIFIED = 0; // Default / none.
+  QTY_SOURCE_MANUAL_OVERRIDE = 1; // Operator override (never overwritten by ETL).
+  QTY_SOURCE_PACKING_DONE = 2; // P1: from wo_grade_actual (packing done).
+  QTY_SOURCE_QC_RELEASED = 3; // P2: TXT normal bobs QC released.
+  QTY_SOURCE_SPG_TRANSFERRED = 4; // P3: SPG transferred bobs (Phase 2).
+  QTY_SOURCE_TXT_TRANSFERRED = 5; // P4: TXT transferred bobbins.
+  QTY_SOURCE_DOFF_ESTIMATE = 6; // P5: SPG doff estimate (Phase 2).
+  QTY_SOURCE_NO_DATA = 7; // No data available.
+}
+
+// ParamResolutionSource is which layer of the WO parameter chain a resolved
+// value came from (v1.2): WO-ref -> product+machine -> product -> default.
+enum ParamResolutionSource {
+  PARAM_RESOLUTION_SOURCE_UNSPECIFIED = 0; // No value resolved.
+  PARAM_RESOLUTION_SOURCE_WO_REF = 1; // From referenced / last-running WO (layer 1).
+  PARAM_RESOLUTION_SOURCE_PRODUCT_MACHINE = 2; // From product_machine_parameter (layer 2).
+  PARAM_RESOLUTION_SOURCE_PRODUCT = 3; // From cost_product_parameter (layer 3).
+  PARAM_RESOLUTION_SOURCE_DEFAULT = 4; // From mst_parameter.default_value (layer 4).
+}
+
+// ThresholdLevel is the scope of an over-production threshold config.
+enum ThresholdLevel {
+  THRESHOLD_LEVEL_UNSPECIFIED = 0; // Default / no-filter.
+  THRESHOLD_LEVEL_SYSTEM = 1; // Global default.
+  THRESHOLD_LEVEL_MACHINE_GROUP = 2; // Per machine group.
+  THRESHOLD_LEVEL_PRODUCT_TYPE = 3; // Per product type.
+  THRESHOLD_LEVEL_PRODUCT = 4; // Per product.
+  THRESHOLD_LEVEL_WO = 5; // Per work order.
+}
+
+// ThresholdUnit is the unit an over-production threshold is expressed in.
+enum ThresholdUnit {
+  THRESHOLD_UNIT_UNSPECIFIED = 0; // Default / none.
+  THRESHOLD_UNIT_PCT = 1; // Percentage over target.
+  THRESHOLD_UNIT_DOFF = 2; // Absolute doff (kg) over target.
+}
+
+// ActiveFilter is the standard active/inactive list filter for PPC masters.
+enum ActiveFilter {
+  ACTIVE_FILTER_UNSPECIFIED = 0; // No filter (show all).
+  ACTIVE_FILTER_ACTIVE = 1; // Only active rows.
+  ACTIVE_FILTER_INACTIVE = 2; // Only inactive rows.
+}
