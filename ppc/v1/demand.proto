@@ -173,6 +173,13 @@ message Demand {
   // It is the only human-readable identity an unlinked demand has, so the UI
   // can name the row instead of rendering a placeholder dash.
   string orion_item_code = 32;
+  // Customer code/name resolved from the PPC customer master via customer_id.
+  // Denormalized for UI the same way product_code/product_name are: the demand
+  // list and detail must name the customer without a second round trip, and an
+  // id alone is never shown to a planner. Empty when customer_id is unset or
+  // the master row has since gone.
+  string customer_code = 33;
+  string customer_name = 34;
   common.v1.AuditInfo audit = 16;
 }
 
