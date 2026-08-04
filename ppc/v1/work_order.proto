@@ -76,6 +76,16 @@ message WORmAllocation {
   string shade_code = 8;
   string qty_allocated = 9; // decimal-as-string
   string notes = 10;
+
+  // Presentation-only decoration resolved from the product's released route
+  // (finance CostMasterRouteRm). crm_rm_id stays the wire identity; these exist
+  // so no consumer ever has to render that raw id to a user. Empty when the
+  // route is unavailable or the edge is no longer part of it.
+  string rm_code = 11; // item / group / product code of the RM edge
+  string rm_name = 12; // display name of the RM edge
+  string route_stage_name = 13; // owning route stage (attribution)
+  int32 route_level = 14; // owning route stage level
+  string route_rm_ratio = 15; // decimal-as-string, ratio the qty suggestion came from
 }
 
 // WOProductionActual is the 1:N per date+shift production actual (two-axis
