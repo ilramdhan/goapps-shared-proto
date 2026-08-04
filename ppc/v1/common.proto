@@ -70,6 +70,20 @@ enum CarryAction {
   CARRY_ACTION_CANCEL = 5; // Close the demand.
 }
 
+// PlanCarryAction is the per-plan-item decision in the start-new-month
+// workflow. Deliberately NARROWER than CarryAction rather than a reuse of it:
+// the plan-item lifecycle (DRAFT/CONFIRMED/IN_PROGRESS/COMPLETED/CLOSED) has no
+// DEFERRED state, so CARRY_ACTION_DEFER has nothing to map onto, and SPLIT would
+// need per-child machine groups and timelines that a demand split never carries.
+// Stretching CarryAction to cover plan items would make two of its five values
+// silently unimplementable.
+enum PlanCarryAction {
+  PLAN_CARRY_ACTION_UNSPECIFIED = 0; // Default / none.
+  PLAN_CARRY_ACTION_CARRY_AS_IS = 1; // New plan item for the whole unplanned qty.
+  PLAN_CARRY_ACTION_PARTIAL_CARRY = 2; // Carry part; the rest is not carried.
+  PLAN_CARRY_ACTION_CANCEL = 3; // Close the plan item without carrying it.
+}
+
 // GradeReq expresses the grade requirement attached to a demand.
 enum GradeReq {
   GRADE_REQ_UNSPECIFIED = 0; // Default / no-filter.
