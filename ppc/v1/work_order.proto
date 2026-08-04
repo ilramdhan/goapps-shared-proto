@@ -671,3 +671,82 @@ message ListMergeCandidatesResponse {
   common.v1.BaseResponse base = 1;
   repeated PlanItem data = 2;
 }
+
+// ── Carry-forward (month start) ──────────────────────────────────────────────
+// Modelled on the demand and plan-item carry pairs so the vocabulary stays the
+// same. A carried WO is a CONTINUATION — the existing primitive, not a new
+// concept — with its own lot and inherited demand/product/machine/parameters.
+// Ineligible WOs are listed with a reason, never silently filtered (S-2.3).
+
+// WorkOrderCarryCandidate is one WO that may be carried into a new month,
+// decorated with everything the planner needs to decide without seeing an id.
+message WorkOrderCarryCandidate {
+  WorkOrder wo = 1;
+  // Qty not yet produced: QtyTarget − SUM(production actual, actual first then
+  // bobbin per row). Non-positive means fully produced — ineligible with reason.
+  string remaining_qty = 2;
+  // Human label for the machine this WO runs on.
+  string machine_label = 3;
+  // Human label for the product this WO produces.
+  string product_label = 4;
+  // Ineligibility reason, empty when the WO is eligible to carry.
+  string ineligibility_reason = 5;
+  // True when a WO in the target month already names this one as its carry
+  // source — a second run over the same source shows it as done.
+  bool already_carried = 6;
+}
+
+// Which WOs can be carried into a target month out of a source month.
+message ListWorkOrderCarryForwardCandidatesRequest {
+  string source_month = 1 [(buf.validate.field).string = {
+    len: 7
+    pattern: "^[0-9]{4}-[0-9]{2}$"
+  }];
+  string target_month = 2 [(buf.validate.field).string = {
+    len: 7
+    pattern: "^[0-9]{4}-[0-9]{2}$"
+  }];
+}
+
+message ListWorkOrderCarryForwardCandidatesResponse {
+  common.v1.BaseResponse base = 1;
+  repeated WorkOrderCarryCandidate data = 2;
+}
+
+// One WO carry action. The action vocabulary is narrower than demand carry
+// because WOs are production instructions, not quantity balances: a carried WO
+// is always a continuation, and rejecting it to close-reroute is a manual
+// planner decision on the source WO's own detail page.
+message ProcessWorkOrderCarryForwardRequest {
+  int64 source_wo_id = 1 [(buf.validate.field).int64.gt = 0];
+  string target_month = 2 [(buf.validate.field).string = {
+    len: 7
+    pattern: "^[0-9]{4}-[0-9]{2}$"
+  }];
+  // Lot number for the continuation. Blank means auto-generate via the
+  // lot-provisioning path, exactly like creating a WO from scratch. An explicit
+  // value must already exist in lot_master (validateLot).
+  //
+  // Bound matches work_order.wo_lot_no VARCHAR(30), as every other lot_no field
+  // in this file does. At 50 a 31..50-char lot cleared validation and then failed
+  // at INSERT as a raw driver error, which reaches the planner as a 500 instead
+  // of a field-level complaint. Generated lots are 10 chars, so nothing real is
+  // excluded by the tighter bound.
+  string lot_no = 3 [(buf.validate.field).string.max_len = 30];
+  // Qty to carry. When unset or zero, the whole remaining qty is carried.
+  //
+  // The pattern admits the empty string: full-remainder is the ordinary case and
+  // the BFF sends "" for it. The previous rule had no empty alternative, so the
+  // documented unset path was unreachable through the RPC — every carry that
+  // left the qty blank was refused at the validation boundary before the handler
+  // (which already checks `req.CarryQty != ""`) could apply the default.
+  string carry_qty = 4 [(buf.validate.field).string = {
+    max_len: 20
+    pattern: "^([0-9]+(\\.[0-9]+)?)?$"
+  }];
+}
+
+message ProcessWorkOrderCarryForwardResponse {
+  common.v1.BaseResponse base = 1;
+  WorkOrder data = 2;
+}

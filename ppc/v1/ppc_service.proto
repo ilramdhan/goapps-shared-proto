@@ -454,6 +454,20 @@ service PPCService {
     };
   }
 
+  // ── Work Order Carry-forward (month start) ──────────────────────────────────
+  // ListWorkOrderCarryForwardCandidates lists WOs eligible to carry into a new
+  // month. Ineligible WOs are included with their reason, never silently filtered.
+  rpc ListWorkOrderCarryForwardCandidates(ListWorkOrderCarryForwardCandidatesRequest) returns (ListWorkOrderCarryForwardCandidatesResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/work-orders/carry-forward-candidates"};
+  }
+  // ProcessWorkOrderCarryForward carries one WO into a new month as a CONTINUATION.
+  rpc ProcessWorkOrderCarryForward(ProcessWorkOrderCarryForwardRequest) returns (ProcessWorkOrderCarryForwardResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/work-orders/{source_wo_id}/carry-forward"
+      body: "*"
+    };
+  }
+
   // ── Layer 3: Work Order ────────────────────────────────────────────────────
   // CreateWorkOrder creates a work order.
   rpc CreateWorkOrder(CreateWorkOrderRequest) returns (CreateWorkOrderResponse) {
