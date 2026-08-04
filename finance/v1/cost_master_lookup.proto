@@ -131,6 +131,14 @@ message CostMasterRouteRm {
   string rm_group_code = 6;
   string route_rm_ratio = 7; // decimal-as-string
   string sub_type = 8;
+  // Resolved human-readable identity of the RM edge, so consumers never have to
+  // render a raw id. Both are derived server-side by rm_type:
+  //   PRODUCT -> cost_product_master (product_code / product_name)
+  //   ITEM    -> cost_erp_item       (item_code / item_name)
+  //   GROUP   -> cst_rm_group_head   (group_code / group_name)
+  // Empty when the referenced master row is missing.
+  string rm_code = 9;
+  string rm_name = 10;
 }
 
 // CostMasterRouteStage is a lightweight route stage projection.

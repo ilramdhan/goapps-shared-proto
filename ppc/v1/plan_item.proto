@@ -38,6 +38,81 @@ message PlanItem {
   // levels, which is what makes those items mergeable into one work order.
   string shade_code = 21;
   string shade_name = 22;
+  // Source plan item this one was carried forward from, 0 when it was not.
+  // A new row per carry (never a month reassignment) is what keeps the source
+  // month's plan an accurate record of what was committed there.
+  int64 carry_from_item_id = 23;
+  // The action that produced this item, when it came from a carry-forward.
+  PlanCarryAction carry_action = 24;
+}
+
+// ── Carry-forward (month start) ──────────────────────────────────────────────
+//
+// Modelled on the demand pair (demand.proto) so the vocabulary stays the same,
+// but with the narrower PlanCarryAction — see ppc/v1/common.proto for why.
+
+// PlanCarryCandidate is one plan item eligible to be carried into a new month,
+// decorated with everything the planner needs to decide without seeing an id.
+message PlanCarryCandidate {
+  PlanItem item = 1;
+  // Qty on this item not yet committed to any work order:
+  // qty_target - SUM(wo_plan_item_link.qty_contribution). This is what
+  // CARRY_AS_IS carries, so a plan item already half-covered by a work order
+  // does not get carried twice.
+  string qty_uncovered = 2;
+  // Qty already covered by work orders, for context alongside qty_uncovered.
+  string qty_covered = 3;
+  // How many work orders reference this plan item. Non-zero means the work is
+  // already in flight and the work-order carry scope may also apply to it.
+  int32 work_order_count = 4;
+  // True when a plan item in the target month already names this one as its
+  // carry source — a second run shows it as done rather than duplicating it.
+  bool already_carried = 5;
+  // Human label of the demand this item serves, for traceability. Empty for a
+  // cascade INTERMEDIATE item, which serves a parent item rather than a demand.
+  string demand_label = 6;
+}
+
+message ListPlanCarryForwardCandidatesRequest {
+  string source_month = 1 [(buf.validate.field).string = {
+    len: 7
+    pattern: "^[0-9]{4}-[0-9]{2}$"
+  }];
+  // Target month the candidates are being carried into. Required: whether a
+  // candidate is `already_carried` can only be answered against a target.
+  string target_month = 2 [(buf.validate.field).string = {
+    len: 7
+    pattern: "^[0-9]{4}-[0-9]{2}$"
+  }];
+}
+
+message ListPlanCarryForwardCandidatesResponse {
+  common.v1.BaseResponse base = 1;
+  repeated PlanCarryCandidate data = 2;
+}
+
+message ProcessPlanCarryForwardRequest {
+  int64 source_plan_item_id = 1 [(buf.validate.field).int64.gt = 0];
+  PlanCarryAction action = 2 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+  string target_month = 3 [(buf.validate.field).string = {
+    len: 7
+    pattern: "^[0-9]{4}-[0-9]{2}$"
+  }];
+  // New deadline for CARRY_AS_IS / PARTIAL_CARRY. Defaults to the source
+  // deadline when omitted.
+  optional string new_deadline = 4 [(buf.validate.field).string.max_len = 10];
+  // Carried qty for PARTIAL_CARRY. Must not exceed the candidate's
+  // qty_uncovered.
+  optional string carry_qty = 5 [(buf.validate.field).string.max_len = 20];
+}
+
+message ProcessPlanCarryForwardResponse {
+  common.v1.BaseResponse base = 1;
+  // The plan item created in the target month. Absent for CANCEL, which
+  // creates nothing.
+  PlanItem data = 2;
 }
 
 message CreatePlanItemRequest {

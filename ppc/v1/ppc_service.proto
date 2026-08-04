@@ -442,6 +442,31 @@ service PPCService {
   rpc GetGanttView(GetGanttViewRequest) returns (GetGanttViewResponse) {
     option (google.api.http) = {get: "/api/v1/ppc/plan-items/gantt"};
   }
+  // ListPlanCarryForwardCandidates lists plan items eligible for carry-forward.
+  rpc ListPlanCarryForwardCandidates(ListPlanCarryForwardCandidatesRequest) returns (ListPlanCarryForwardCandidatesResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/plan-items/carry-forward-candidates"};
+  }
+  // ProcessPlanCarryForward executes a per-plan-item carry-forward action.
+  rpc ProcessPlanCarryForward(ProcessPlanCarryForwardRequest) returns (ProcessPlanCarryForwardResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/plan-items/{source_plan_item_id}/carry-forward"
+      body: "*"
+    };
+  }
+
+  // ── Work Order Carry-forward (month start) ──────────────────────────────────
+  // ListWorkOrderCarryForwardCandidates lists WOs eligible to carry into a new
+  // month. Ineligible WOs are included with their reason, never silently filtered.
+  rpc ListWorkOrderCarryForwardCandidates(ListWorkOrderCarryForwardCandidatesRequest) returns (ListWorkOrderCarryForwardCandidatesResponse) {
+    option (google.api.http) = {get: "/api/v1/ppc/work-orders/carry-forward-candidates"};
+  }
+  // ProcessWorkOrderCarryForward carries one WO into a new month as a CONTINUATION.
+  rpc ProcessWorkOrderCarryForward(ProcessWorkOrderCarryForwardRequest) returns (ProcessWorkOrderCarryForwardResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ppc/work-orders/{source_wo_id}/carry-forward"
+      body: "*"
+    };
+  }
 
   // ── Layer 3: Work Order ────────────────────────────────────────────────────
   // CreateWorkOrder creates a work order.
