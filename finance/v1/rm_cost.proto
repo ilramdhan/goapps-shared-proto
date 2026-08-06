@@ -275,39 +275,6 @@ message TriggerRMCostCalculationResponse {
 }
 
 // =============================================================================
-// MESSAGES - Calculate (synchronous, admin-only)
-// =============================================================================
-
-// CalculateRMCost runs a calculation synchronously and returns the produced rows.
-// Intended for admin/troubleshooting use — production traffic should go through
-// TriggerRMCostCalculation.
-message CalculateRMCostRequest {
-  // Period (YYYYMM).
-  string period = 1 [(buf.validate.field).string = {
-    len: 6
-    pattern: "^\\d{6}$"
-  }];
-  // Optional single-group scope.
-  optional string group_head_id = 2 [(buf.validate.field).string.uuid = true];
-  // Why this calc was run.
-  RMCostTriggerReason trigger_reason = 3 [(buf.validate.field).enum = {
-    not_in: [0]
-  }];
-}
-
-// Calculate response.
-message CalculateRMCostResponse {
-  // Standard response envelope.
-  common.v1.BaseResponse base = 1;
-  // Number of group heads processed.
-  int32 processed = 2;
-  // Number of group heads skipped (no active details / no source rows).
-  int32 skipped = 3;
-  // Period that was calculated (echoes request).
-  string period = 4;
-}
-
-// =============================================================================
 // MESSAGES - Get
 // =============================================================================
 
@@ -434,14 +401,6 @@ service RMCostService {
   rpc TriggerRMCostCalculation(TriggerRMCostCalculationRequest) returns (TriggerRMCostCalculationResponse) {
     option (google.api.http) = {
       post: "/api/v1/finance/rm-costs/trigger"
-      body: "*"
-    };
-  }
-
-  // CalculateRMCost runs a recalculation synchronously (admin-only).
-  rpc CalculateRMCost(CalculateRMCostRequest) returns (CalculateRMCostResponse) {
-    option (google.api.http) = {
-      post: "/api/v1/finance/rm-costs/calculate"
       body: "*"
     };
   }
