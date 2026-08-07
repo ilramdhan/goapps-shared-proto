@@ -273,6 +273,10 @@ message CostResult {
   google.protobuf.Timestamp verified_at = 20;
   // User who verified (resolved label).
   string verified_by = 21;
+  // Product type id (from cost_product_master.cpm_product_type_id).
+  int32 product_type_id = 22;
+  // Resolved product type code (never the raw id in the UI).
+  string product_type_code = 23;
 }
 
 // CostBreakdown is the full drill-down for one CostResult.
@@ -321,6 +325,9 @@ message CostRMDetail {
   string ratio = 6;
   // Contribution = unit_cost × ratio.
   string contribution = 7;
+  // Route level this RM edge feeds (1 = FG; 2..N upstream). Already stored in
+  // cpc_rm_cost_detail JSON; previously omitted from the contract.
+  int32 route_level = 8;
 }
 
 // FormulaEval traces one formula evaluation step.
@@ -523,6 +530,36 @@ message ListCostResultsRequest {
   string search = 4 [(buf.validate.field).string.max_len = 100];
   // Result status filter (UNSPECIFIED = active only, i.e. exclude SUPERSEDED).
   CostResultStatus status = 5;
+  // Product type filter (empty = all types).
+  repeated int32 product_type_ids = 6 [(buf.validate.field).repeated.max_items = 200];
+  // Sort field. Accepted: productCode, productName, period, calculationType,
+  // costPerUnit, totalCost, status, calculatedAt. Unknown/empty = default order
+  // (cpc_calculated_at DESC, cpc_cost_id DESC).
+  string sort_by = 7 [(buf.validate.field).string = {
+    in: [
+      "",
+      "productCode",
+      "productName",
+      "period",
+      "calculationType",
+      "costPerUnit",
+      "totalCost",
+      "status",
+      "calculatedAt"
+    ]
+  }];
+  // Sort direction; empty = asc when sort_by names a column (an empty sort_by
+  // still falls back to the default newest-first order). Lowercase only,
+  // matching every other finance list RPC — the repository compares with
+  // EqualFold, so the uppercase spellings were accepted-but-redundant surface
+  // area.
+  string sort_order = 8 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
 }
 
 // ListCostResultsResponse returns a page of cost results across products.
@@ -535,6 +572,17 @@ message ListCostResultsResponse {
   common.v1.PaginationResponse pagination = 3;
   // The period actually used (resolved when request period was empty).
   string resolved_period = 4;
+}
+
+// ListCostResultPeriodsRequest has no filter arguments.
+message ListCostResultPeriodsRequest {}
+
+// ListCostResultPeriodsResponse carries the distinct set of calculated periods.
+message ListCostResultPeriodsResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Distinct periods ordered DESC (newest first), YYYYMM strings.
+  repeated string periods = 2;
 }
 
 // GetCostBreakdownRequest fetches the full drill-down for a cost.
@@ -555,6 +603,190 @@ message GetCostBreakdownResponse {
   common.v1.BaseResponse base = 1;
   // Full breakdown: summary + by-level + rm details + formula trace.
   CostBreakdown breakdown = 2;
+}
+
+// RouteCostSheetStage is one route stage (one column of the product cost sheet).
+// Stages are ordered by (route_level, route_seq) as stored in cost_route_seq.
+message RouteCostSheetStage {
+  // Route level (1 = first stage; ascending downstream).
+  int32 route_level = 1;
+  // Sequence within the level.
+  int32 route_seq = 2;
+  // Route stage name (e.g. "POY", "PTY").
+  string route_name = 3;
+  // Item code of the stage product (used as the sheet/column label; never an id).
+  string item_code = 4;
+  // Resolved product name of the stage product.
+  string product_name = 5;
+  // Shade code (if applicable).
+  string shade_code = 6;
+  // Shade name (if applicable).
+  string shade_name = 7;
+  // Stage product sys id (internal; not rendered in the sheet).
+  int64 product_sys_id = 8;
+  // False when no cost row exists for this stage in the requested period/type;
+  // the export renders an all-"-" column instead of failing.
+  bool has_cost = 9;
+  // Parameter snapshot for this stage (key = param_code, val = stringified value).
+  map<string, string> param_snapshot = 10;
+}
+
+// GetRouteCostSheetRequest fetches every route stage's cost snapshot for one
+// product in a single round-trip, so an N-column sheet costs one call.
+message GetRouteCostSheetRequest {
+  // Target product sys id; must be > 0.
+  int64 product_sys_id = 1 [(buf.validate.field).int64.gt = 0];
+  // Period in YYYYMM format.
+  string period = 2 [(buf.validate.field).string.pattern = "^[0-9]{6}$"];
+  // Calculation flavor; cannot be UNSPECIFIED.
+  CalculationType calculation_type = 3 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+}
+
+// GetRouteCostSheetResponse returns the ordered route stages with snapshots.
+message GetRouteCostSheetResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Stages ordered by (route_level, route_seq).
+  repeated RouteCostSheetStage stages = 2;
+}
+
+// RequestProductCostSheetExportRequest queues an async product-cost-sheet
+// export job. Carries the same filter shape as ListCostResultsRequest, plus an
+// optional explicit product selection that overrides the filter when non-empty.
+message RequestProductCostSheetExportRequest {
+  // Period in YYYYMM. Required — MinIO artifacts are namespaced by period.
+  string period = 1 [(buf.validate.field).string.pattern = "^[0-9]{6}$"];
+  // Calculation type filter (UNSPECIFIED = all types in the period).
+  CalculationType calculation_type = 2;
+  // Product type filter (empty = all types).
+  repeated int32 product_type_ids = 3 [(buf.validate.field).repeated.max_items = 200];
+  // Product code/name search (case-insensitive, optional).
+  string search = 4 [(buf.validate.field).string.max_len = 100];
+  // Result status filter (UNSPECIFIED = active only).
+  CostResultStatus status = 5;
+  // Explicit product selection; when non-empty the filters above are ignored.
+  // Capped at the export handler's own maxExportProducts so an oversized
+  // request is rejected at the edge instead of silently truncated deep in the
+  // handler. Keep the two numbers in sync.
+  repeated int64 product_sys_ids = 6 [(buf.validate.field).repeated.max_items = 200];
+}
+
+// RequestProductCostSheetExportResponse acknowledges the queued job.
+message RequestProductCostSheetExportResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Queued job summary (job_id, job_code, status).
+  ProductCostSheetExportJobInfo data = 2;
+}
+
+// ProductCostSheetExportJobInfo summarizes a freshly-queued export job.
+message ProductCostSheetExportJobInfo {
+  // job_execution.job_id (UUID).
+  string job_id = 1;
+  // Human-readable code (e.g. "PCS_EX-202604-001").
+  string job_code = 2;
+  // Initial status, typically "QUEUED".
+  string status = 3;
+  // True when this job is a batch-tracking parent (jex_total_children > 0)
+  // fanned out into multiple child export jobs. When false, total_children/
+  // completed_children/failed_children are all 0 and irrelevant.
+  bool is_batch = 4;
+  // Total child jobs expected (only meaningful when is_batch = true).
+  int32 total_children = 5;
+  // Child jobs that finished SUCCESS so far.
+  int32 completed_children = 6;
+  // Child jobs that finished FAILED so far.
+  int32 failed_children = 7;
+}
+
+// GetProductCostSheetDownloadURLRequest identifies the export job whose
+// artifact the caller wants to download.
+message GetProductCostSheetDownloadURLRequest {
+  // job_execution.job_id (UUID).
+  string job_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetProductCostSheetDownloadURLResponse carries a presigned download URL.
+message GetProductCostSheetDownloadURLResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Presigned URL + suggested filename + expiry.
+  ProductCostSheetDownloadInfo data = 2;
+}
+
+// ProductCostSheetDownloadInfo carries the presigned URL for the UI.
+message ProductCostSheetDownloadInfo {
+  // Short-lived presigned URL the browser can redirect to.
+  string url = 1;
+  // Suggested filename (Content-Disposition).
+  string file_name = 2;
+  // ISO8601 expiry for the presigned URL.
+  string expires_at = 3;
+}
+
+// ListCostSheetExportBatchChildrenRequest identifies the batch-tracking
+// parent job whose child export jobs should be enumerated.
+message ListCostSheetExportBatchChildrenRequest {
+  // job_execution.job_id of the parent (batch-tracking) job.
+  string parent_job_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// ListCostSheetExportBatchChildrenResponse lists every child job belonging
+// to a batch fan-out, in creation order.
+message ListCostSheetExportBatchChildrenResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Child jobs ordered by creation time (ascending).
+  repeated CostSheetExportBatchChildInfo children = 2;
+}
+
+// CostSheetExportBatchChildInfo summarizes one child job within a batch
+// fan-out, including its download URL once the artifact is ready.
+message CostSheetExportBatchChildInfo {
+  // job_execution.job_id (UUID).
+  string job_id = 1;
+  // Human-readable code (e.g. "PCS_EX-202604-001").
+  string job_code = 2;
+  // Current status (e.g. "QUEUED", "PROCESSING", "SUCCESS", "FAILED").
+  string status = 3;
+  // Short-lived presigned download URL; empty until status is SUCCESS and
+  // the URL could be resolved. Never causes the batch listing to fail.
+  string download_url = 4;
+  // Suggested filename (Content-Disposition); empty when download_url is empty.
+  string file_name = 5;
+}
+
+// GetProductCostSheetExportJobStatusRequest identifies the export job (either
+// a standalone job or a batch-tracking parent) whose live status/progress
+// should be polled while it is still QUEUED or PROCESSING.
+message GetProductCostSheetExportJobStatusRequest {
+  // job_execution.job_id (UUID). Works for both a standalone job and a batch
+  // parent job.
+  string job_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetProductCostSheetExportJobStatusResponse reports the job's current
+// status and, for a batch parent, its live child-completion counters.
+message GetProductCostSheetExportJobStatusResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // job_execution.job_id (UUID).
+  string job_id = 2;
+  // Human-readable code (e.g. "PCS_EX-202604-001").
+  string job_code = 3;
+  // Current status (e.g. "QUEUED", "PROCESSING", "SUCCESS", "FAILED").
+  string status = 4;
+  // True when this job is a batch-tracking parent (jex_total_children > 0).
+  // When false, total_children/completed_children/failed_children are all 0.
+  bool is_batch = 5;
+  // Total child jobs expected (only meaningful when is_batch = true).
+  int32 total_children = 6;
+  // Child jobs that finished SUCCESS so far.
+  int32 completed_children = 7;
+  // Child jobs that finished FAILED so far.
+  int32 failed_children = 8;
 }
 
 // ListCostHistoryRequest lists versioned cost history for a product.
@@ -636,6 +868,88 @@ message ProcessChunkInternalResponse {
   int32 blocked_count = 4;
 }
 
+// GetBatchChildDownloadUrlRequest identifies one child job within a batch
+// fan-out whose artifact should be freshly presigned.
+message GetBatchChildDownloadUrlRequest {
+  // job_execution.job_id of the parent (batch-tracking) job.
+  string parent_job_id = 1 [(buf.validate.field).string.uuid = true];
+  // job_execution.job_id of the child job whose artifact is downloaded.
+  string child_job_id = 2 [(buf.validate.field).string.uuid = true];
+}
+
+// GetBatchChildDownloadUrlResponse carries a freshly presigned download URL
+// for one child job's artifact. Re-presigned on every call; short validity
+// (~5 min) is fine since it is used immediately after fetch.
+message GetBatchChildDownloadUrlResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Short-lived presigned URL the browser can redirect to.
+  string download_url = 2;
+  // Suggested filename (Content-Disposition).
+  string file_name = 3;
+}
+
+// DownloadExportBatchZipRequest identifies the batch-tracking parent job
+// whose completed child artifacts should be bundled into a single zip.
+message DownloadExportBatchZipRequest {
+  // job_execution.job_id of the parent (batch-tracking) job.
+  string parent_job_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DownloadExportBatchZipResponse carries the zipped bytes of every completed
+// child file in the batch as one unary response (small few-hundred-KB-to-
+// few-MB payloads are fine here; no streaming precedent exists in this file).
+message DownloadExportBatchZipResponse {
+  // Zip archive bytes containing every completed child export file.
+  bytes zip_data = 1;
+  // Suggested filename (Content-Disposition).
+  string file_name = 2;
+}
+
+// ListExportJobsRequest lists recent cost-sheet export job_execution rows
+// (both batch-tracking parents and standalone single jobs), for a "recent
+// exports" UI.
+message ListExportJobsRequest {
+  // Pagination params.
+  common.v1.PaginationRequest pagination = 1;
+  // Optional period filter (YYYYMM).
+  string period = 2 [(buf.validate.field).string = {pattern: "^$|^[0-9]{6}$"}];
+}
+
+// ListExportJobsResponse returns a page of export job summaries.
+message ListExportJobsResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Page of export job summaries, newest first.
+  repeated ExportJobSummary jobs = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// ExportJobSummary summarizes one export job row (parent/batch or standalone)
+// for the recent-exports listing.
+message ExportJobSummary {
+  // job_execution.job_id (UUID).
+  string job_id = 1;
+  // Human-readable code (e.g. "PCS_EX-202604-001").
+  string job_code = 2;
+  // Period in YYYYMM format.
+  string period = 3;
+  // Current status (e.g. "QUEUED", "PROCESSING", "SUCCESS", "FAILED").
+  string status = 4;
+  // Total child jobs expected (only meaningful when is_batch = true).
+  int32 total_children = 5;
+  // Child jobs that finished SUCCESS so far.
+  int32 completed_children = 6;
+  // Child jobs that finished FAILED so far.
+  int32 failed_children = 7;
+  // When the job was queued.
+  google.protobuf.Timestamp queued_at = 8;
+  // True when this job is a batch-tracking parent fanned out into multiple
+  // child export jobs; false for a standalone single job.
+  bool is_batch = 9;
+}
+
 // CostCalcService runs the cost calculation engine and exposes results.
 service CostCalcService {
   // TriggerCalcJob creates a new calc job batch.
@@ -685,6 +999,11 @@ service CostCalcService {
   rpc ListCostResults(ListCostResultsRequest) returns (ListCostResultsResponse) {
     option (google.api.http) = {get: "/api/v1/finance/cost-results"};
   }
+  // ListCostResultPeriods returns distinct periods with cost results (newest first).
+  // Required permission: finance.cost.result.view.
+  rpc ListCostResultPeriods(ListCostResultPeriodsRequest) returns (ListCostResultPeriodsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-results/periods"};
+  }
   // GetCostBreakdown returns by-level + rm-details + formula-trace for a cost.
   // Required permission: finance.cost.result.view.
   rpc GetCostBreakdown(GetCostBreakdownRequest) returns (GetCostBreakdownResponse) {
@@ -715,5 +1034,46 @@ service CostCalcService {
   // Invoked by finance-cost-worker after consuming a chunk message from RMQ.
   // NOT exposed via REST gateway; intended for service-to-service traffic only.
   // Required permission: finance.cost.caljob.trigger.
+  // GetRouteCostSheet returns every route stage's param snapshot for one
+  // product in one round-trip (backs the product cost sheet export).
+  rpc GetRouteCostSheet(GetRouteCostSheetRequest) returns (GetRouteCostSheetResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-results/{product_sys_id}/{period}/{calculation_type}/route-sheet"};
+  }
+  // RequestProductCostSheetExport queues an async A4 xlsx export job.
+  rpc RequestProductCostSheetExport(RequestProductCostSheetExportRequest) returns (RequestProductCostSheetExportResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/cost-results/request-export"
+      body: "*"
+    };
+  }
+  // GetProductCostSheetDownloadURL presigns the finished export artifact.
+  rpc GetProductCostSheetDownloadURL(GetProductCostSheetDownloadURLRequest) returns (GetProductCostSheetDownloadURLResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-results/exports/{job_id}/download"};
+  }
+  // ListCostSheetExportBatchChildren enumerates a batch-tracking parent
+  // job's child export jobs, each with its download URL once ready.
+  rpc ListCostSheetExportBatchChildren(ListCostSheetExportBatchChildrenRequest) returns (ListCostSheetExportBatchChildrenResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-results/exports/{parent_job_id}/children"};
+  }
+  // GetProductCostSheetExportJobStatus polls a standalone or batch-parent
+  // export job's live status/progress while it is still in flight.
+  rpc GetProductCostSheetExportJobStatus(GetProductCostSheetExportJobStatusRequest) returns (GetProductCostSheetExportJobStatusResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-results/exports/{job_id}/status"};
+  }
   rpc ProcessChunkInternal(ProcessChunkInternalRequest) returns (ProcessChunkInternalResponse);
+  // GetBatchChildDownloadUrl freshly presigns one child job's artifact
+  // within a batch fan-out.
+  rpc GetBatchChildDownloadUrl(GetBatchChildDownloadUrlRequest) returns (GetBatchChildDownloadUrlResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-results/exports/{parent_job_id}/children/{child_job_id}/download-url"};
+  }
+  // DownloadExportBatchZip streams a zip of every completed child file in a
+  // batch as one download.
+  rpc DownloadExportBatchZip(DownloadExportBatchZipRequest) returns (DownloadExportBatchZipResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-results/exports/{parent_job_id}/download-all"};
+  }
+  // ListExportJobs lists recent cost-sheet export jobs (batch parents and
+  // standalone jobs) for a "recent exports" UI.
+  rpc ListExportJobs(ListExportJobsRequest) returns (ListExportJobsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-results/exports"};
+  }
 }
