@@ -1,0 +1,236 @@
+syntax = "proto3";
+
+package finance.v1;
+
+// Note: go_package is managed by buf.gen.yaml managed mode
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "finance/v1/uom.proto";
+import "google/api/annotations.proto";
+
+// =============================================================================
+// MESSAGES - Entity
+// =============================================================================
+
+// SpinFixedCost represents the monthly POY (HOY) spinning fixed-cost pool.
+// Exactly one live row exists per period; the pool is shared by every POY product.
+message SpinFixedCost {
+  // Unique identifier (UUID).
+  string id = 1;
+  // Period in YYYYMM format (e.g., "202606"). Immutable after creation.
+  string period = 2;
+  // Common POY denier for the period. Used as a divisor by the calc engine.
+  double common_poy_denier = 3;
+  // Total POY production for the period. Used as a divisor by the calc engine.
+  double poy_production = 4;
+  // Monthly spinning power cost.
+  double spin_power_month = 5;
+  // Monthly spinning manpower cost.
+  double spin_manpower_month = 6;
+  // Monthly spinning overheads cost.
+  double spin_overheads_month = 7;
+  // Monthly spinning consumable spare parts cost.
+  double spin_conssprs_month = 8;
+  // Whether the record is active.
+  bool is_active = 9;
+  // Audit information.
+  common.v1.AuditInfo audit = 16;
+}
+
+// =============================================================================
+// MESSAGES - Create
+// =============================================================================
+
+// CreateSpinFixedCostRequest is the request for creating a new spinning fixed-cost pool.
+message CreateSpinFixedCostRequest {
+  // Period in YYYYMM format (e.g., "202606"). Immutable after creation.
+  string period = 1 [(buf.validate.field).string = {
+    len: 6
+    pattern: "^[0-9]{6}$"
+  }];
+  // Common POY denier for the period. Must be greater than zero (calc engine divisor).
+  double common_poy_denier = 2 [(buf.validate.field).double.gt = 0];
+  // Total POY production for the period. Must be greater than zero (calc engine divisor).
+  double poy_production = 3 [(buf.validate.field).double.gt = 0];
+  // Monthly spinning power cost (must be zero or greater).
+  double spin_power_month = 4 [(buf.validate.field).double.gte = 0];
+  // Monthly spinning manpower cost (must be zero or greater).
+  double spin_manpower_month = 5 [(buf.validate.field).double.gte = 0];
+  // Monthly spinning overheads cost (must be zero or greater).
+  double spin_overheads_month = 6 [(buf.validate.field).double.gte = 0];
+  // Monthly spinning consumable spare parts cost (must be zero or greater).
+  double spin_conssprs_month = 7 [(buf.validate.field).double.gte = 0];
+}
+
+// CreateSpinFixedCostResponse is the response for creating a spinning fixed-cost pool.
+message CreateSpinFixedCostResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Created spinning fixed-cost pool data.
+  SpinFixedCost data = 2;
+}
+
+// =============================================================================
+// MESSAGES - Get
+// =============================================================================
+
+// GetSpinFixedCostRequest is the request for getting a spinning fixed-cost pool by ID.
+message GetSpinFixedCostRequest {
+  // Spinning fixed-cost pool ID (UUID format).
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetSpinFixedCostResponse is the response for getting a spinning fixed-cost pool.
+message GetSpinFixedCostResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Spinning fixed-cost pool data.
+  SpinFixedCost data = 2;
+}
+
+// =============================================================================
+// MESSAGES - Update
+// =============================================================================
+
+// UpdateSpinFixedCostRequest is the request for updating a spinning fixed-cost pool.
+// Note: period is immutable and cannot be changed after creation.
+message UpdateSpinFixedCostRequest {
+  // Spinning fixed-cost pool ID to update (UUID format).
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  // New common POY denier (optional, must be greater than zero if provided).
+  optional double common_poy_denier = 2 [(buf.validate.field).double.gt = 0];
+  // New total POY production (optional, must be greater than zero if provided).
+  optional double poy_production = 3 [(buf.validate.field).double.gt = 0];
+  // New monthly spinning power cost (optional, zero or greater if provided).
+  optional double spin_power_month = 4 [(buf.validate.field).double.gte = 0];
+  // New monthly spinning manpower cost (optional, zero or greater if provided).
+  optional double spin_manpower_month = 5 [(buf.validate.field).double.gte = 0];
+  // New monthly spinning overheads cost (optional, zero or greater if provided).
+  optional double spin_overheads_month = 6 [(buf.validate.field).double.gte = 0];
+  // New monthly spinning consumable spare parts cost (optional, zero or greater if provided).
+  optional double spin_conssprs_month = 7 [(buf.validate.field).double.gte = 0];
+  // New active status (optional).
+  optional bool is_active = 8;
+}
+
+// UpdateSpinFixedCostResponse is the response for updating a spinning fixed-cost pool.
+message UpdateSpinFixedCostResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated spinning fixed-cost pool data.
+  SpinFixedCost data = 2;
+}
+
+// =============================================================================
+// MESSAGES - Delete
+// =============================================================================
+
+// DeleteSpinFixedCostRequest is the request for deleting (soft delete) a spinning fixed-cost pool.
+message DeleteSpinFixedCostRequest {
+  // Spinning fixed-cost pool ID to delete (UUID format).
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteSpinFixedCostResponse is the response for deleting a spinning fixed-cost pool.
+message DeleteSpinFixedCostResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+}
+
+// =============================================================================
+// MESSAGES - List with Search & Filter
+// =============================================================================
+
+// ListSpinFixedCostsRequest is the request for listing spinning fixed-cost pools
+// with search, filter, and pagination.
+message ListSpinFixedCostsRequest {
+  // Page number (1-indexed, default 1, min 1).
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  // Items per page (1-100, default 10).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Search query (searches in period).
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  // Filter by active status.
+  // ACTIVE_FILTER_UNSPECIFIED (0) = show all, ACTIVE_FILTER_ACTIVE (1) = only active,
+  // ACTIVE_FILTER_INACTIVE (2) = only inactive.
+  ActiveFilter active_filter = 4;
+  // Filter by period in YYYYMM format (empty = all periods).
+  string period = 5 [(buf.validate.field) = {
+    ignore: IGNORE_IF_ZERO_VALUE
+    string: {
+      len: 6
+      pattern: "^[0-9]{6}$"
+    }
+  }];
+  // Sort field: "period", "created_at", "updated_at" (default: "period").
+  string sort_by = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "period",
+      "created_at",
+      "updated_at"
+    ]
+  }];
+  // Sort order: "asc", "desc" (default: "desc").
+  string sort_order = 7 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+// ListSpinFixedCostsResponse is the response for listing spinning fixed-cost pools.
+message ListSpinFixedCostsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // List of spinning fixed-cost pools.
+  repeated SpinFixedCost data = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// =============================================================================
+// SERVICE DEFINITION
+// =============================================================================
+
+// SpinFixedCostService provides CRUD operations for the monthly POY (HOY)
+// spinning fixed-cost pool master data.
+service SpinFixedCostService {
+  // CreateSpinFixedCost creates a new spinning fixed-cost pool for a period.
+  rpc CreateSpinFixedCost(CreateSpinFixedCostRequest) returns (CreateSpinFixedCostResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/spin-fixed-costs"
+      body: "*"
+    };
+  }
+
+  // GetSpinFixedCost retrieves a spinning fixed-cost pool by ID.
+  rpc GetSpinFixedCost(GetSpinFixedCostRequest) returns (GetSpinFixedCostResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/spin-fixed-costs/{id}"};
+  }
+
+  // UpdateSpinFixedCost updates an existing spinning fixed-cost pool.
+  // Note: period is immutable and cannot be changed.
+  rpc UpdateSpinFixedCost(UpdateSpinFixedCostRequest) returns (UpdateSpinFixedCostResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/spin-fixed-costs/{id}"
+      body: "*"
+    };
+  }
+
+  // DeleteSpinFixedCost soft deletes a spinning fixed-cost pool.
+  rpc DeleteSpinFixedCost(DeleteSpinFixedCostRequest) returns (DeleteSpinFixedCostResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/spin-fixed-costs/{id}"};
+  }
+
+  // ListSpinFixedCosts lists spinning fixed-cost pools with search, filter, and pagination.
+  rpc ListSpinFixedCosts(ListSpinFixedCostsRequest) returns (ListSpinFixedCostsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/spin-fixed-costs"};
+  }
+}
