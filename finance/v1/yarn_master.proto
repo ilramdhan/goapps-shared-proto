@@ -3227,6 +3227,11 @@ message PushableMbHead {
   bool has_selling = 5;
   // Whether a FORECAST cost value is available to push.
   bool has_forecast = 6;
+  // Whether this head was already pushed for the period but its pushed cost has since gone
+  // stale — the source cst_product_cost row is SUPERSEDED (or unlinked) and a newer
+  // non-superseded row exists. Informational only: such a head is still pushable, and
+  // re-pushing is exactly the remedy.
+  bool needs_repush = 7;
 }
 
 // SkippedMbHead describes an MB Head excluded from the push, with the reason why.
@@ -3249,6 +3254,9 @@ message PreviewPushToHeadResponse {
   repeated PushableMbHead pushable = 2;
   // MB Heads excluded from push, with reasons.
   repeated SkippedMbHead skipped = 3;
+  // Count of pushable heads flagged needs_repush — heads whose already-pushed cost went stale
+  // after a later MB Batch run. Surfaced as its own bucket so operators can act on it.
+  int32 needs_repush_count = 4;
 }
 
 // ExecutePushToHeadRequest is the request for executing a push-to-head batch for a period.
