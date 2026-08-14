@@ -1261,6 +1261,45 @@ message MBHead {
   string param_no_of_process = 35;
   // Machine assigned for MACHINE_MB_FIXED_TOTAL cost resolution (references mst_machine.mc_id). Optional.
   optional string machine_id = 36 [(buf.validate.field).string.uuid = true];
+  // VS number. Unique among live records.
+  string mbh_vs_number = 37;
+  // Number of process option code (references mst_mb_param_option where mbpo_mbp_code = 'NO_OF_PROCESS'), e.g. "S"/"D"/"T".
+  string mbh_no_of_process = 38;
+  // Additional shade codes beyond the header shade (at most 2). Label-only metadata, no costing impact.
+  repeated MBHeadShade shades = 39;
+}
+
+// MBHeadShade is an additional shade code carried by an MB Head beyond the header shade.
+message MBHeadShade {
+  // UUID primary key.
+  string mbhs_id = 1;
+  // Display sequence number within the head (2 or 3; the header shade is #1).
+  int32 mbhs_seq_no = 2;
+  // Shade code.
+  string mbhs_shade_code = 3;
+  // Shade name.
+  string mbhs_shade_name = 4;
+  // Audit metadata.
+  common.v1.AuditInfo audit = 5;
+}
+
+// MBHeadShadeInput is a desired additional shade supplied on MB Head create/update.
+message MBHeadShadeInput {
+  // Display sequence number within the head (2 or 3; the header shade is #1).
+  int32 mbhs_seq_no = 1 [(buf.validate.field).int32 = {
+    gte: 2
+    lte: 3
+  }];
+  // Shade code (max 20 chars).
+  string mbhs_shade_code = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  // Shade name (max 100 chars).
+  string mbhs_shade_name = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
 }
 
 // CreateMBHeadRequest is the request for creating an MB Head record.
@@ -1272,38 +1311,71 @@ message CreateMBHeadRequest {
   }];
   // Optional Oracle sys ID (max 30 chars).
   optional string mbh_oracle_sys_id = 2 [(buf.validate.field).string.max_len = 30];
-  // Management display name (max 100 chars).
-  optional string mbh_mgt_name = 3 [(buf.validate.field).string.max_len = 100];
-  // Optional yarn denier.
-  optional double mbh_denier = 4;
-  // Optional number of filaments.
-  optional int32 mbh_filament = 5;
+  // Management display name / MB Name (1-100 chars). Required.
+  string mbh_mgt_name = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // POY denier (> 0). Required.
+  double mbh_denier = 4 [(buf.validate.field).double.gt = 0];
+  // POY filament count (> 0). Required.
+  int32 mbh_filament = 5 [(buf.validate.field).int32.gt = 0];
   // Optional dozing percentage.
   optional double mbh_dozing = 6;
   // Optional Oracle CMBH_CHECK_STATUS (max 50 chars).
   optional string mbh_check_status = 7 [(buf.validate.field).string.max_len = 50];
   // Optional Oracle CMBH_STATUS (max 100 chars).
   optional string mbh_status = 8 [(buf.validate.field).string.max_len = 100];
-  // Optional Oracle CMBH_LDR_PRSN (≥ 0).
-  optional double mbh_ldr_prsn = 9 [(buf.validate.field).double.gte = 0];
-  // Optional Oracle CMBH_FINAL_PRODUCT (max 200 chars).
-  optional string mbh_final_product = 10 [(buf.validate.field).string.max_len = 200];
+  // LDR percentage (0-100). Required.
+  double mbh_ldr_prsn = 9 [(buf.validate.field).double = {
+    gte: 0
+    lte: 100
+  }];
+  // Final product description (1-200 chars). Required.
+  string mbh_final_product = 10 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
   // Optional Oracle CMBH_CODE (max 100 chars).
   optional string mbh_code = 11 [(buf.validate.field).string.max_len = 100];
   // Whether this MB is a bought-out item (no internal spinning cost). Immutable after creation.
   bool mbh_is_boughtout = 12;
-  // Development code (max 50 chars).
-  optional string mbh_dev_code = 13 [(buf.validate.field).string.max_len = 50];
-  // Shade code (max 20 chars).
-  optional string mbh_shade_code = 14 [(buf.validate.field).string.max_len = 20];
-  // Shade name (max 100 chars).
-  optional string mbh_shade_name = 15 [(buf.validate.field).string.max_len = 100];
-  // Cross-section descriptor (max 20 chars).
-  optional string mbh_cross_section = 16 [(buf.validate.field).string.max_len = 20];
+  // Development number (1-50 chars). Required. Unique among live records.
+  string mbh_dev_code = 13 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 50
+  }];
+  // Shade code (1-20 chars). Required.
+  string mbh_shade_code = 14 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  // Shade name (1-100 chars). Required.
+  string mbh_shade_name = 15 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Cross-section descriptor (1-20 chars). Required.
+  string mbh_cross_section = 16 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
   // Lusture code, references MbLusture.code (max 10 chars).
   optional string mbh_lusture_code = 17 [(buf.validate.field).string.max_len = 10];
   // Machine assigned for MACHINE_MB_FIXED_TOTAL cost resolution (references mst_machine.mc_id).
   optional string mbh_machine_id = 18 [(buf.validate.field).string.uuid = true];
+  // VS number (1-50 chars). Required. Unique among live records.
+  string mbh_vs_number = 19 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 50
+  }];
+  // Number of process option code, e.g. "S"/"D"/"T" (1-10 chars). Required.
+  string mbh_no_of_process = 20 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 10
+  }];
+  // Additional shades beyond the header shade (at most 2).
+  repeated MBHeadShadeInput shades = 21 [(buf.validate.field).repeated.max_items = 2];
 }
 
 // CreateMBHeadResponse is the response for creating an MB Head record.
@@ -1337,12 +1409,15 @@ message UpdateMBHeadRequest {
     min_len: 1
     max_len: 100
   }];
-  // Updated management display name (max 100 chars).
-  optional string mbh_mgt_name = 3 [(buf.validate.field).string.max_len = 100];
-  // Updated yarn denier.
-  optional double mbh_denier = 4;
-  // Updated number of filaments.
-  optional int32 mbh_filament = 5;
+  // Updated management display name / MB Name (1-100 chars). Required.
+  string mbh_mgt_name = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Updated POY denier (> 0). Required.
+  double mbh_denier = 4 [(buf.validate.field).double.gt = 0];
+  // Updated POY filament count (> 0). Required.
+  int32 mbh_filament = 5 [(buf.validate.field).int32.gt = 0];
   // Updated dozing percentage.
   optional double mbh_dozing = 6;
   // Updated active status.
@@ -1351,24 +1426,54 @@ message UpdateMBHeadRequest {
   optional string mbh_check_status = 8 [(buf.validate.field).string.max_len = 50];
   // Optional Oracle CMBH_STATUS (max 100 chars).
   optional string mbh_status = 9 [(buf.validate.field).string.max_len = 100];
-  // Optional Oracle CMBH_LDR_PRSN (≥ 0).
-  optional double mbh_ldr_prsn = 10 [(buf.validate.field).double.gte = 0];
-  // Optional Oracle CMBH_FINAL_PRODUCT (max 200 chars).
-  optional string mbh_final_product = 11 [(buf.validate.field).string.max_len = 200];
+  // Updated LDR percentage (0-100). Required.
+  double mbh_ldr_prsn = 10 [(buf.validate.field).double = {
+    gte: 0
+    lte: 100
+  }];
+  // Updated final product description (1-200 chars). Required.
+  string mbh_final_product = 11 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
   // Optional Oracle CMBH_CODE (max 100 chars).
   optional string mbh_code = 12 [(buf.validate.field).string.max_len = 100];
-  // Development code (max 50 chars).
-  optional string mbh_dev_code = 13 [(buf.validate.field).string.max_len = 50];
-  // Shade code (max 20 chars).
-  optional string mbh_shade_code = 14 [(buf.validate.field).string.max_len = 20];
-  // Shade name (max 100 chars).
-  optional string mbh_shade_name = 15 [(buf.validate.field).string.max_len = 100];
-  // Cross-section descriptor (max 20 chars).
-  optional string mbh_cross_section = 16 [(buf.validate.field).string.max_len = 20];
+  // Updated development number (1-50 chars). Required. Unique among live records.
+  string mbh_dev_code = 13 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 50
+  }];
+  // Updated shade code (1-20 chars). Required.
+  string mbh_shade_code = 14 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  // Updated shade name (1-100 chars). Required.
+  string mbh_shade_name = 15 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Updated cross-section descriptor (1-20 chars). Required.
+  string mbh_cross_section = 16 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
   // Lusture code, references MbLusture.code (max 10 chars).
   optional string mbh_lusture_code = 17 [(buf.validate.field).string.max_len = 10];
   // Machine assigned for MACHINE_MB_FIXED_TOTAL cost resolution (references mst_machine.mc_id).
   optional string mbh_machine_id = 18 [(buf.validate.field).string.uuid = true];
+  // Updated VS number (1-50 chars). Required. Unique among live records.
+  string mbh_vs_number = 19 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 50
+  }];
+  // Updated number of process option code, e.g. "S"/"D"/"T" (1-10 chars). Required.
+  string mbh_no_of_process = 20 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 10
+  }];
+  // Full desired list of additional shades beyond the header shade (at most 2). Replace-on-save.
+  repeated MBHeadShadeInput shades = 21 [(buf.validate.field).repeated.max_items = 2];
 }
 
 // UpdateMBHeadResponse is the response for updating an MB Head record.
@@ -1470,6 +1575,8 @@ message ImportMBHeadsRequest {
       "error"
     ]
   }];
+  // When true, validate every row and return counts and errors without writing anything.
+  bool dry_run = 4;
 }
 
 // ImportMBHeadsResponse is the response for importing MB Head records.
@@ -1484,6 +1591,8 @@ message ImportMBHeadsResponse {
   int32 failed_count = 4;
   // Per-row import errors.
   repeated ImportError errors = 5;
+  // Number of existing records updated.
+  int32 updated_count = 6;
 }
 
 // DownloadMBHeadTemplateRequest is the request for downloading the import template.
