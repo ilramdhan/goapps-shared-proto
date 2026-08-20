@@ -1211,6 +1211,8 @@ message MBHead {
   optional string mbh_status = 10;
   // Optional Oracle CMBH_LDR_PRSN — LDR person value.
   optional double mbh_ldr_prsn = 11;
+  // Optional Oracle CMBH_RUN_LDR_PRSN — actual LDR percentage used in production (D30: authoritative LDR for costing).
+  optional double mbh_run_ldr_pct = 37;
   // Optional Oracle CMBH_FINAL_PRODUCT — final product description.
   optional string mbh_final_product = 12;
   // Optional Oracle CMBH_CODE — product code.
@@ -1304,6 +1306,8 @@ message CreateMBHeadRequest {
   optional string mbh_lusture_code = 17 [(buf.validate.field).string.max_len = 10];
   // Machine assigned for MACHINE_MB_FIXED_TOTAL cost resolution (references mst_machine.mc_id).
   optional string mbh_machine_id = 18 [(buf.validate.field).string.uuid = true];
+  // Optional Oracle CMBH_RUN_LDR_PRSN — actual LDR percentage (≥ 0).
+  optional double mbh_run_ldr_pct = 19 [(buf.validate.field).double.gte = 0];
 }
 
 // CreateMBHeadResponse is the response for creating an MB Head record.
@@ -1369,6 +1373,8 @@ message UpdateMBHeadRequest {
   optional string mbh_lusture_code = 17 [(buf.validate.field).string.max_len = 10];
   // Machine assigned for MACHINE_MB_FIXED_TOTAL cost resolution (references mst_machine.mc_id).
   optional string mbh_machine_id = 18 [(buf.validate.field).string.uuid = true];
+  // Optional Oracle CMBH_RUN_LDR_PRSN — actual LDR percentage (≥ 0).
+  optional double mbh_run_ldr_pct = 19 [(buf.validate.field).double.gte = 0];
 }
 
 // UpdateMBHeadResponse is the response for updating an MB Head record.
@@ -1607,6 +1613,8 @@ message MBSpin {
   optional double mbs_ldr_prsn = 13;
   // Optional Oracle CMBS_FINAL_PRODUCT — final product description.
   optional string mbs_final_product = 14;
+  // Optional Oracle CMBS_RUN_LDR_PRSN — actual LDR percentage used in production (D30: authoritative LDR for costing).
+  optional double mbs_run_ldr_pct = 15;
   // Audit metadata.
   common.v1.AuditInfo audit = 16;
 }
@@ -1640,6 +1648,8 @@ message CreateMBSpinRequest {
   optional double mbs_ldr_prsn = 11 [(buf.validate.field).double.gte = 0];
   // Optional Oracle CMBS_FINAL_PRODUCT (max 200 chars).
   optional string mbs_final_product = 12 [(buf.validate.field).string.max_len = 200];
+  // Optional Oracle CMBS_RUN_LDR_PRSN — actual LDR percentage (≥ 0).
+  optional double mbs_run_ldr_pct = 13 [(buf.validate.field).double.gte = 0];
 }
 
 // CreateMBSpinResponse is the response for creating an MB Spin record.
@@ -1697,6 +1707,8 @@ message UpdateMBSpinRequest {
   optional double mbs_ldr_prsn = 12 [(buf.validate.field).double.gte = 0];
   // Optional Oracle CMBS_FINAL_PRODUCT (max 200 chars).
   optional string mbs_final_product = 13 [(buf.validate.field).string.max_len = 200];
+  // Optional Oracle CMBS_RUN_LDR_PRSN — actual LDR percentage (≥ 0).
+  optional double mbs_run_ldr_pct = 14 [(buf.validate.field).double.gte = 0];
 }
 
 // UpdateMBSpinResponse is the response for updating an MB Spin record.
