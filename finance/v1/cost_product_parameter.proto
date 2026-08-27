@@ -57,6 +57,22 @@ message RequiredParamEntry {
   string display_group = 12;
   // param_code of the MASTER_LOOKUP trigger param this child belongs to (empty = not a child param).
   string lookup_fill_group_code = 13;
+  // Resolved mst_mb_spin.mbs_id for MB_SPIN lookup params, when the current
+  // value_text was resolved to EXACTLY one active-or-not spin at save time.
+  // Empty = not yet resolved (either not an MB_SPIN param, no value, or the
+  // resolution was ambiguous/orphaned — see mb_spin_candidate_count).
+  string value_mb_spin_id = 14;
+  // Number of mst_mb_spin rows whose mbs_orion_item_code currently matches
+  // value_text, computed at read time (not stored) using the identical
+  // matching rule as the save-time resolver. Only meaningful for MB_SPIN
+  // lookup params with a non-empty value_text — see
+  // has_mb_spin_candidate_count. When value_mb_spin_id is already set this
+  // field is not needed to determine state, but is still populated.
+  int32 mb_spin_candidate_count = 15;
+  // True when mb_spin_candidate_count was actually computed for this row
+  // (an MB_SPIN lookup param with a non-empty value_text). False means the
+  // count is not applicable — do not interpret 0 as "not applicable".
+  bool has_mb_spin_candidate_count = 16;
   // Existing value (zero/empty when not yet bound).
   bool has_value = 20;
   string value_numeric = 21;

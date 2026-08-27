@@ -1187,6 +1187,36 @@ message DownloadProductGradeTemplateResponse {
 // MESSAGES — MB Head
 // =============================================================================
 
+// MBHeadShade is one additional shade of an MB recipe (max 2 per recipe).
+// Mirrors mst_mb_head_shade (migration 000483): mbhs_shade_code is NOT NULL,
+// mbhs_shade_name is nullable, and mbhs_seq_no is constrained to (1, 2).
+message MBHeadShade {
+  // UUID primary key (mbhs_id).
+  string mbhs_id = 1;
+  // Sequence number of the additional shade. 1 or 2.
+  int32 mbhs_seq_no = 2;
+  // Shade code. Always present (NOT NULL in DB).
+  string mbhs_shade_code = 3;
+  // Shade name. May be empty — column is nullable in DB.
+  string mbhs_shade_name = 4;
+}
+
+// MBHeadShadeInput is an additional-shade row supplied on create/update.
+message MBHeadShadeInput {
+  // Sequence number of the additional shade. 1 or 2 (DB CHECK mbhs_seq_no IN (1, 2)).
+  int32 mbhs_seq_no = 1 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 2
+  }];
+  // Shade code (max 20 chars). Required — NOT NULL in DB.
+  string mbhs_shade_code = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  // Shade name (max 100 chars). Optional — nullable in DB.
+  optional string mbhs_shade_name = 3 [(buf.validate.field).string.max_len = 100];
+}
+
 // MBHead represents a Melange Batch head master record (MEL yarn type only).
 message MBHead {
   // UUID primary key.
@@ -1211,11 +1241,13 @@ message MBHead {
   optional string mbh_status = 10;
   // Optional Oracle CMBH_LDR_PRSN — LDR person value.
   optional double mbh_ldr_prsn = 11;
+  // Optional Oracle CMBH_RUN_LDR_PRSN — actual LDR percentage used in production (D30: authoritative LDR for costing).
+  optional double mbh_run_ldr_pct = 37;
   // Optional Oracle CMBH_FINAL_PRODUCT — final product description.
   optional string mbh_final_product = 12;
   // Optional Oracle CMBH_CODE — product code.
   optional string mbh_code = 13;
-  // MB Costing Suite workflow state (mbh_entry_status). One of DRAFT/SUBMITTED/APPROVED/VALIDATED/UN_APPROVED/REVOKED.
+  // MB Costing Suite workflow state (mbh_entry_status). One of DRAFT/SUBMITTED/APPROVED/VALIDATED/UN_APPROVED/REVOKED/REJECTED (REJECTED added by user decision K-2).
   string entry_status = 14;
   // Whether this MB is a bought-out item (no internal spinning cost).
   bool is_boughtout = 15;
@@ -1261,6 +1293,42 @@ message MBHead {
   string param_no_of_process = 35;
   // Machine assigned for MACHINE_MB_FIXED_TOTAL cost resolution (references mst_machine.mc_id). Optional.
   optional string machine_id = 36 [(buf.validate.field).string.uuid = true];
+  // Optional VS number (free text, e.g. "NA"). Wired from existing column mbh_vs_number.
+  optional string mbh_vs_number = 38;
+  // Optional number-of-process option code: "S", "D" or "T". No default is implied — absent means NULL.
+  optional string mbh_no_of_process = 39;
+  // Additional shades (max 2). Combined with the header shade this yields up to 3 shades per recipe.
+  repeated MBHeadShade additional_shades = 40;
+  // Whether the record is locked. Field only — lock/unlock BEHAVIOUR is out of scope here (P10).
+  optional bool mbh_is_locked = 41;
+  // Timestamp when an unlock was requested (RFC3339). Field only — behaviour is P10.
+  optional string mbh_unlock_requested_at = 42;
+  // User who requested the unlock. Field only — behaviour is P10.
+  optional string mbh_unlock_requested_by = 43;
+  // DERIVED check status (mbh_check_status_calc), computed by the backend from
+  // mbh_entry_status + mbh_is_boughtout. User decision K-1 option 2: the legacy
+  // mbh_check_status (field 9) stays FROZEN as the Oracle import trace and is never
+  // written by the application; THIS field is the computed one.
+  // ABSENT means "never calculated by the application" — 207 legacy heads keep it
+  // absent permanently, there is no backfill. Clients MUST render that explicitly
+  // (e.g. "Belum dihitung"); they MUST NOT coerce it to "" or to a placeholder that
+  // reads as a stored value, and they MUST NOT compute it themselves.
+  optional string mbh_check_status_calc = 44;
+  // Reason WRITTEN BY THE REQUESTER when calling RequestUnlockMBHead, i.e. the
+  // free-text justification for why the locked recipe needs to be reopened.
+  // Persisted in mst_mb_head.mbh_unlock_reason.
+  //
+  // ABSENT means no unlock request has ever been recorded for this head. It is
+  // deliberately NOT cleared when an unlock is granted or rejected — the trail of
+  // why the unlock was asked for must survive the decision.
+  //
+  // Rendered next to mbh_unlock_requested_by (43) and mbh_unlock_requested_at (42)
+  // so the approver sees WHO asked, WHEN, and WHY before deciding.
+  //
+  // ⛔ This is NOT state_reason. state_reason carries the reason of the PREVIOUS
+  // workflow step (principle U-2) and is left untouched by RequestUnlockMBHead —
+  // never substitute one for the other.
+  optional string mbh_unlock_reason = 45;
 }
 
 // CreateMBHeadRequest is the request for creating an MB Head record.
@@ -1302,8 +1370,27 @@ message CreateMBHeadRequest {
   optional string mbh_cross_section = 16 [(buf.validate.field).string.max_len = 20];
   // Lusture code, references MbLusture.code (max 10 chars).
   optional string mbh_lusture_code = 17 [(buf.validate.field).string.max_len = 10];
+  // DEPRECATED (A5) — removed from the UI; the backend ignores this value and always resolves
+  // the "MB" machine. Retained in the contract because removing a field would be breaking.
+  // (Intentionally not using the Go "Deprecated:" doc marker: it would propagate into the
+  // generated code and trip staticcheck SA1019 in existing handwritten handlers.)
   // Machine assigned for MACHINE_MB_FIXED_TOTAL cost resolution (references mst_machine.mc_id).
   optional string mbh_machine_id = 18 [(buf.validate.field).string.uuid = true];
+  // Optional Oracle CMBH_RUN_LDR_PRSN — actual LDR percentage (≥ 0).
+  optional double mbh_run_ldr_pct = 19 [(buf.validate.field).double.gte = 0];
+  // Optional VS number (free text, max 50 chars). No pattern, no uniqueness — literal "NA" is valid.
+  optional string mbh_vs_number = 20 [(buf.validate.field).string.max_len = 50];
+  // Optional number-of-process option code: "S", "D" or "T". No default is implied — absent means NULL.
+  optional string mbh_no_of_process = 21 [(buf.validate.field).string = {
+    in: [
+      "",
+      "S",
+      "D",
+      "T"
+    ]
+  }];
+  // Additional shades (max 2).
+  repeated MBHeadShadeInput additional_shades = 22 [(buf.validate.field).repeated.max_items = 2];
 }
 
 // CreateMBHeadResponse is the response for creating an MB Head record.
@@ -1367,8 +1454,30 @@ message UpdateMBHeadRequest {
   optional string mbh_cross_section = 16 [(buf.validate.field).string.max_len = 20];
   // Lusture code, references MbLusture.code (max 10 chars).
   optional string mbh_lusture_code = 17 [(buf.validate.field).string.max_len = 10];
+  // DEPRECATED (A5) — removed from the UI; the backend ignores this value and always resolves
+  // the "MB" machine. Retained in the contract because removing a field would be breaking.
+  // (Intentionally not using the Go "Deprecated:" doc marker: it would propagate into the
+  // generated code and trip staticcheck SA1019 in existing handwritten handlers.)
   // Machine assigned for MACHINE_MB_FIXED_TOTAL cost resolution (references mst_machine.mc_id).
   optional string mbh_machine_id = 18 [(buf.validate.field).string.uuid = true];
+  // Optional Oracle CMBH_RUN_LDR_PRSN — actual LDR percentage (≥ 0).
+  optional double mbh_run_ldr_pct = 19 [(buf.validate.field).double.gte = 0];
+  // Optional VS number (free text, max 50 chars). No pattern, no uniqueness — literal "NA" is valid.
+  optional string mbh_vs_number = 20 [(buf.validate.field).string.max_len = 50];
+  // Optional number-of-process option code: "S", "D" or "T". No default is implied — absent means NULL.
+  optional string mbh_no_of_process = 21 [(buf.validate.field).string = {
+    in: [
+      "",
+      "S",
+      "D",
+      "T"
+    ]
+  }];
+  // Additional shades (max 2).
+  repeated MBHeadShadeInput additional_shades = 22 [(buf.validate.field).repeated.max_items = 2];
+  // Whether additional_shades should replace the stored shade list. Only when true is the
+  // list rewritten. Legacy forms omit this flag, so their updates never wipe existing shades.
+  optional bool replace_additional_shades = 23;
 }
 
 // UpdateMBHeadResponse is the response for updating an MB Head record.
@@ -1422,6 +1531,13 @@ message ListMBHeadsRequest {
       "desc"
     ]
   }];
+  // ⭐ DIPERBARUI 2026-08-26 (R16) — Filter by linked cost product (mst_mb_head.mbh_cost_product_id).
+  // Optional; 0 (unset) means no filter, matching the existing product_type_id convention in
+  // ListCostProductMastersRequest. Lets the product detail page look up its MB Head(s) from the
+  // product side — mbh_cost_product_id is the only direction this FK exists in; CostProductMaster
+  // has no column pointing back to MB. NOTE: this column is only populated when a head reaches
+  // VALIDATED (mb_autogen_repository.go), so a still-DRAFT head will not be found by this filter.
+  int64 cost_product_id = 7;
 }
 
 // ListMBHeadsResponse is the response for listing MB Head records.
@@ -1438,10 +1554,78 @@ message ListMBHeadsResponse {
 message ExportMBHeadsRequest {
   // Filter by active status.
   ActiveFilter active_filter = 1;
+  // Whether to include REJECTED documents in the export.
+  //
+  // Default false (proto3 zero value) EXCLUDES rejected documents, keeping this
+  // export byte-for-byte identical to its behaviour before this field existed.
+  // Set to true to include them (audit use case).
+  bool include_rejected = 2;
 }
 
 // ExportMBHeadsResponse is the response for exporting MB Head records.
 message ExportMBHeadsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Excel file content.
+  bytes file_content = 2;
+  // Excel file name.
+  string file_name = 3;
+}
+
+// ExportMBRecipeFullRequest is the request for the denormalized full recipe export
+// (P12 / items C1 + C2): one Excel row per composition line, with the MB cost block
+// joined in. Read-only — it never writes to cst_mb_cost or cst_product_cost.
+message ExportMBRecipeFullRequest {
+  // Filter by active status of the MB head.
+  ActiveFilter active_filter = 1;
+  // Cost period YYYYMM. Empty means "latest period per head".
+  string period = 2 [(buf.validate.field).string = {pattern: "^$|^[0-9]{6}$"}];
+  // Cost type to include. Empty defaults to ACTUAL, which keeps the row count
+  // bounded to one cost row per composition line.
+  string cost_type = 3 [(buf.validate.field).string = {
+    in: [
+      "",
+      "ACTUAL",
+      "SELLING",
+      "FORECAST"
+    ]
+  }];
+  // Filter by the DERIVED check status (mst_mb_head.mbh_check_status_calc, P10).
+  //
+  // Empty means ALL ROWS, including heads whose derived status is still NULL — so
+  // leaving this unset keeps the export byte-for-byte identical to its behaviour
+  // before this filter existed. A non-empty value keeps only heads carrying exactly
+  // that value, which necessarily EXCLUDES the NULL ("Belum dihitung") heads.
+  //
+  // The six accepted values are the six allowed by the CHECK constraint
+  // chk_mbh_check_status_calc (migration 000487). ⚠ Only THREE of them are produced
+  // by DeriveCheckStatus today — "Boughtout", "Approved", "Waiting". Filtering by
+  // "Current", "Outdated" or "Rejected" is therefore VALID but returns ZERO ROWS
+  // until the corresponding user gates are decided. ⛔ Not a bug.
+  //
+  // ⛔ There is deliberately NO sentinel for "only the NULL heads" — that semantic
+  // has not been decided by the user.
+  string check_status_calc = 4 [(buf.validate.field).string = {
+    in: [
+      "",
+      "Waiting",
+      "Current",
+      "Boughtout",
+      "Approved",
+      "Outdated",
+      "Rejected"
+    ]
+  }];
+  // Whether to include REJECTED documents in the export.
+  //
+  // Default false (proto3 zero value) EXCLUDES rejected documents, keeping this
+  // export byte-for-byte identical to its behaviour before this field existed.
+  // Set to true to include them (audit use case).
+  bool include_rejected = 5;
+}
+
+// ExportMBRecipeFullResponse carries the full-recipe Excel workbook bytes.
+message ExportMBRecipeFullResponse {
   // Standard response metadata.
   common.v1.BaseResponse base = 1;
   // Excel file content.
@@ -1573,6 +1757,86 @@ message RevokeMBHeadResponse {
   MBHead data = 2;
 }
 
+// RejectMBHeadRequest is the request for rejecting a submitted MB Head (K-2).
+message RejectMBHeadRequest {
+  // MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+  // Reason for rejecting. Required (K-2).
+  string reason = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+// RejectMBHeadResponse is the response for rejecting an MB Head.
+message RejectMBHeadResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated MB Head data.
+  MBHead data = 2;
+}
+
+// ReturnMBHeadToDraftRequest is the request for returning a rejected MB Head back to draft (K-29).
+message ReturnMBHeadToDraftRequest {
+  // MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+  // Reason for returning to draft. Optional (K-29); when empty the existing state_reason is preserved.
+  string reason = 2;
+}
+
+// ReturnMBHeadToDraftResponse is the response for returning an MB Head to draft.
+message ReturnMBHeadToDraftResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated MB Head data.
+  MBHead data = 2;
+}
+
+// RequestUnlockMBHeadRequest is the request for asking that a locked MB Head be unlocked (P10).
+message RequestUnlockMBHeadRequest {
+  // MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+  // Reason for requesting the unlock. Required — the domain rejects an empty or
+  // whitespace-only reason with ErrReasonRequired.
+  string reason = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+// RequestUnlockMBHeadResponse is the response for requesting an MB Head unlock.
+message RequestUnlockMBHeadResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated MB Head data.
+  MBHead data = 2;
+}
+
+// GrantUnlockMBHeadRequest is the request for approving a pending MB Head unlock (P10).
+message GrantUnlockMBHeadRequest {
+  // MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GrantUnlockMBHeadResponse is the response for granting an MB Head unlock.
+message GrantUnlockMBHeadResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated MB Head data.
+  MBHead data = 2;
+}
+
+// RejectUnlockMBHeadRequest is the request for refusing a pending MB Head unlock (P10, K-52).
+message RejectUnlockMBHeadRequest {
+  // MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+  // Reason for refusing the unlock. Required — consistent with every other refusing
+  // transition on this service.
+  string reason = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+// RejectUnlockMBHeadResponse is the response for refusing an MB Head unlock.
+message RejectUnlockMBHeadResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated MB Head data.
+  MBHead data = 2;
+}
+
 // =============================================================================
 // MESSAGES — MB Spin
 // =============================================================================
@@ -1607,8 +1871,16 @@ message MBSpin {
   optional double mbs_ldr_prsn = 13;
   // Optional Oracle CMBS_FINAL_PRODUCT — final product description.
   optional string mbs_final_product = 14;
+  // Optional Oracle CMBS_RUN_LDR_PRSN — actual LDR percentage used in production (D30: authoritative LDR for costing).
+  optional double mbs_run_ldr_pct = 15;
   // Audit metadata.
   common.v1.AuditInfo audit = 16;
+  // Fix/actual marker for the LDR value. Absent means "unknown", which the
+  // domain treats as FIXED (recalc-safe). true = fixed, false = computed.
+  optional bool mbs_ldr_is_fixed = 17;
+  // Fix/actual marker for the dozing value. Absent means "unknown", which the
+  // domain treats as FIXED (recalc-safe). true = fixed, false = computed.
+  optional bool mbs_dozing_is_fixed = 18;
 }
 
 // CreateMBSpinRequest is the request for creating an MB Spin record.
@@ -1640,6 +1912,12 @@ message CreateMBSpinRequest {
   optional double mbs_ldr_prsn = 11 [(buf.validate.field).double.gte = 0];
   // Optional Oracle CMBS_FINAL_PRODUCT (max 200 chars).
   optional string mbs_final_product = 12 [(buf.validate.field).string.max_len = 200];
+  // Optional Oracle CMBS_RUN_LDR_PRSN — actual LDR percentage (≥ 0).
+  optional double mbs_run_ldr_pct = 13 [(buf.validate.field).double.gte = 0];
+  // Optional fix/actual marker for LDR. Absent = unknown (treated as fixed).
+  optional bool mbs_ldr_is_fixed = 14;
+  // Optional fix/actual marker for dozing. Absent = unknown (treated as fixed).
+  optional bool mbs_dozing_is_fixed = 15;
 }
 
 // CreateMBSpinResponse is the response for creating an MB Spin record.
@@ -1697,6 +1975,12 @@ message UpdateMBSpinRequest {
   optional double mbs_ldr_prsn = 12 [(buf.validate.field).double.gte = 0];
   // Optional Oracle CMBS_FINAL_PRODUCT (max 200 chars).
   optional string mbs_final_product = 13 [(buf.validate.field).string.max_len = 200];
+  // Optional Oracle CMBS_RUN_LDR_PRSN — actual LDR percentage (≥ 0).
+  optional double mbs_run_ldr_pct = 14 [(buf.validate.field).double.gte = 0];
+  // Optional fix/actual marker for LDR. Absent = leave unchanged.
+  optional bool mbs_ldr_is_fixed = 15;
+  // Optional fix/actual marker for dozing. Absent = leave unchanged.
+  optional bool mbs_dozing_is_fixed = 16;
 }
 
 // UpdateMBSpinResponse is the response for updating an MB Spin record.
@@ -1836,6 +2120,87 @@ message DownloadMBSpinTemplateResponse {
   bytes file_content = 2;
   // Excel file name.
   string file_name = 3;
+}
+
+// DuplicateMBSpinRequest is the request for duplicating an MB Spin record.
+//
+// Shape follows design §3.7. mbs_oracle_sys_id, mbs_orion_item_code and
+// mbs_mb_costing are DELIBERATELY ABSENT: decision D19 requires all three to be
+// NULL on the clone, so there is no field to carry them. The user fills them in
+// afterwards via UpdateMBSpin.
+message DuplicateMBSpinRequest {
+  // Parent MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+  // Source MB Spin UUID — the record being duplicated.
+  string mbs_id = 2 [(buf.validate.field).string.uuid = true];
+  // Optional override for the clone's management display name (max 100 chars).
+  // Absent means the server derives it as "<source name> (copy)".
+  optional string mbs_mgt_name = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Optional override for the clone's denier, strictly greater than zero.
+  // Absent means the source value is copied as-is.
+  //
+  // NOTE — the > 0 rule is INTENTIONALLY STRICTER than CreateMBSpinRequest /
+  // UpdateMBSpinRequest, which accept any double. This field is never a
+  // passthrough of stored legacy data: it exists only to carry a value a user
+  // just typed into the duplicate dialog, and a zero/negative denier there is
+  // always a mistake. Legacy rows keep flowing through Create/Update untouched.
+  optional double mbs_denier = 4 [(buf.validate.field).double.gt = 0];
+  // Optional override for the clone's filament count, strictly greater than
+  // zero. Absent means the source value is copied as-is. Same stricter-than-
+  // Create/Update reasoning as mbs_denier above.
+  optional int32 mbs_filament = 5 [(buf.validate.field).int32.gt = 0];
+}
+
+// MBSpinRecalcSkipped is one child spin that the duplicate/recalc pass did NOT
+// touch (rule A7).
+//
+// Children are recalculated only when mbs_status = 'R and D'. A child in
+// 'Spinning' or 'Boughtout', or one whose status is absent, carries an actual
+// production value that must never be overwritten by a derived one — it is
+// skipped and reported here so the UI can say WHICH children were left alone
+// and why, instead of silently doing less than the user expected.
+message MBSpinRecalcSkipped {
+  // Skipped child spin UUID.
+  string mbs_id = 1;
+  // Skipped child spin management display name, for display without a refetch.
+  string mbs_mgt_name = 2;
+  // Status that caused the skip. Absent = the child has no status at all, which
+  // is itself a skip reason (an absent status is treated as non-recalculable).
+  optional string mbs_status = 3;
+  // Machine-readable skip reason, e.g. STATUS_NOT_RND or STATUS_ABSENT.
+  string reason = 4;
+}
+
+// DuplicateMBSpinResponse is the response for duplicating an MB Spin record.
+//
+// ⚠ The impact_* fields are a PREVIEW ONLY (decision D24). Nothing in this
+// response is the result of a yarn-product recalculation: duplicating a spin
+// NEVER recalculates yarn products. The rows only tell the user which products
+// would be affected, so they can decide what to do next.
+message DuplicateMBSpinResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // The newly created clone.
+  MBSpin data = 2;
+  // Child spins deliberately left untouched by the recalc pass (rule A7).
+  // Empty when every candidate child was recalculated.
+  repeated MBSpinRecalcSkipped skipped = 3;
+  // Number of skipped child spins. Equals len(skipped) — sent explicitly so a
+  // caller that ignores the detail rows still gets the count.
+  int32 skipped_count = 4;
+  // Products that WOULD be affected, Top-N. ⛔ NOT a recalculation result (D24).
+  // Reuses DozingImpactRow, the same row type PreviewDozingImpact returns, so
+  // the UI can render both with one component.
+  repeated DozingImpactRow impact_preview = 5;
+  // Total number of affected products, before truncation.
+  int32 impact_total_affected = 6;
+  // Number of affected products whose costing is locked.
+  int32 impact_total_locked = 7;
+  // True when impact_preview was truncated by the server's row cap.
+  bool impact_truncated = 8;
 }
 
 // =============================================================================
@@ -2092,6 +2457,11 @@ service MBHeadService {
   rpc ExportMBHeads(ExportMBHeadsRequest) returns (ExportMBHeadsResponse) {
     option (google.api.http) = {get: "/api/v1/finance/mb-heads/export"};
   }
+  // ExportMBRecipeFull exports the denormalized full MB recipe (recipe + composition
+  // + MB cost) to Excel, one row per composition line.
+  rpc ExportMBRecipeFull(ExportMBRecipeFullRequest) returns (ExportMBRecipeFullResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/mb-heads/export-full"};
+  }
   // ImportMBHeads imports MB Head records from Excel.
   rpc ImportMBHeads(ImportMBHeadsRequest) returns (ImportMBHeadsResponse) {
     option (google.api.http) = {
@@ -2135,6 +2505,45 @@ service MBHeadService {
   rpc RevokeMBHead(RevokeMBHeadRequest) returns (RevokeMBHeadResponse) {
     option (google.api.http) = {
       post: "/api/v1/finance/mb-heads/{mbh_id}/revoke"
+      body: "*"
+    };
+  }
+  // RejectMBHead rejects a submitted MB Head (K-2). Reason is required.
+  rpc RejectMBHead(RejectMBHeadRequest) returns (RejectMBHeadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-heads/{mbh_id}/reject"
+      body: "*"
+    };
+  }
+  // ReturnMBHeadToDraft returns a rejected MB Head back to draft (K-29). Reason is optional; when empty the existing state_reason is preserved.
+  rpc ReturnMBHeadToDraft(ReturnMBHeadToDraftRequest) returns (ReturnMBHeadToDraftResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-heads/{mbh_id}/return-to-draft"
+      body: "*"
+    };
+  }
+  // RequestUnlockMBHead parks a locked MB Head (APPROVED/VALIDATED) in UNLOCK_REQUESTED
+  // so an approver can decide (P10). Reason is REQUIRED — an unlock reopens content that
+  // was already approved, so the record must say why.
+  rpc RequestUnlockMBHead(RequestUnlockMBHeadRequest) returns (RequestUnlockMBHeadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-heads/{mbh_id}/request-unlock"
+      body: "*"
+    };
+  }
+  // GrantUnlockMBHead approves a pending unlock request: the MB Head is unlocked and
+  // returns to DRAFT for editing (P10).
+  rpc GrantUnlockMBHead(GrantUnlockMBHeadRequest) returns (GrantUnlockMBHeadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-heads/{mbh_id}/grant-unlock"
+      body: "*"
+    };
+  }
+  // RejectUnlockMBHead refuses a pending unlock request: the MB Head stays locked and
+  // returns to the state it was parked from (P10, K-52). Reason is REQUIRED.
+  rpc RejectUnlockMBHead(RejectUnlockMBHeadRequest) returns (RejectUnlockMBHeadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-heads/{mbh_id}/reject-unlock"
       body: "*"
     };
   }
@@ -2182,6 +2591,17 @@ service MBSpinService {
   // DownloadMBSpinTemplate downloads the Excel import template.
   rpc DownloadMBSpinTemplate(DownloadMBSpinTemplateRequest) returns (DownloadMBSpinTemplateResponse) {
     option (google.api.http) = {get: "/api/v1/finance/mb-heads/{mbh_id}/spins/template"};
+  }
+  // DuplicateMBSpin clones an MB Spin under the same head (decision D19: the
+  // clone is born with mbs_oracle_sys_id, mbs_orion_item_code and
+  // mbs_mb_costing NULL, and mbs_status = 'R and D'). Recalculates eligible
+  // child spins one level deep and reports the skipped ones; it does NOT
+  // recalculate yarn products (D24) — the response carries a preview only.
+  rpc DuplicateMBSpin(DuplicateMBSpinRequest) returns (DuplicateMBSpinResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-heads/{mbh_id}/spins/{mbs_id}/duplicate"
+      body: "*"
+    };
   }
 }
 
@@ -2351,12 +2771,50 @@ message MasterOption {
   string value = 1;
   // The "label" field value displayed to the user.
   string label = 2;
+  // ⭐ DIPERBARUI 2026-08-26 (U-mbspin-lookup-detail): spin denier (dtex).
+  // Currently only populated for the MB_SPIN lookup master, so users can tell
+  // visually-similar MB Spin entries apart. Unset for every other lookup master.
+  optional double denier = 3;
+  // ⭐ DIPERBARUI 2026-08-26 (U-mbspin-lookup-detail): number of filaments.
+  // Currently only populated for the MB_SPIN lookup master. Unset otherwise.
+  optional int32 filament = 4;
+  // ⭐ DIPERBARUI 2026-08-26 (U-mbspin-lookup-detail): field 5 ("dozing") was
+  // sourced from the mbs_dozing column, which D30 flagged as retired/
+  // contaminated (mixes oil-dozing-rate ~0.03 scale with run_ldr ~3.55 scale
+  // across different MB Heads). Withdrawn by explicit user decision on
+  // 2026-08-26 in favor of the two unambiguous LDR fields below. Number kept
+  // reserved per breaking-change rules -- never reuse field 5.
+  reserved 5;
+  reserved "dozing";
+  // ⭐ DIPERBARUI 2026-08-26 (U-mbspin-lookup-detail): planned LDR percentage
+  // (mst_mb_spin.mbs_ldr_prsn, "LDR Rencana (%)"). Only populated for the
+  // MB_SPIN lookup master. Unset otherwise.
+  optional double ldr_prsn = 6;
+  // ⭐ DIPERBARUI 2026-08-26 (U-mbspin-lookup-detail): actual/run LDR
+  // percentage used in cost calculation (mst_mb_spin.mbs_run_ldr_pct,
+  // "LDR Aktual (%)"). Only populated for the MB_SPIN lookup master. Unset
+  // otherwise.
+  optional double run_ldr_pct = 7;
 }
 
 // ListMasterOptionsRequest queries the registered table to populate a combobox.
 message ListMasterOptionsRequest {
   // lookup_master_code (e.g., "MACHINE") — used to resolve table_name + code/label fields.
   string master_code = 1 [(buf.validate.field).string.min_len = 1];
+  // ⭐ DIPERBARUI 2026-08-26 (perf: SP Code dropdown lag, server-side search) —
+  // optional search keyword, matched (case-insensitive) against both the
+  // master's code column and its label column. Empty/absent means no search
+  // predicate (returns the same rows as before, subject to the new limit
+  // below).
+  optional string search = 2 [(buf.validate.field).string.max_len = 100];
+  // ⭐ DIPERBARUI 2026-08-26 (perf: SP Code dropdown lag, server-side search) —
+  // optional max rows to return. Absent or 0 falls back to a server-side
+  // default (200 — see LookupMasterRepository.ListMasterOptions) instead of
+  // returning the whole table.
+  optional int32 limit = 3 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 500
+  }];
 }
 
 // ListMasterOptionsResponse is the response for ListMasterOptions.
@@ -3549,6 +4007,509 @@ service MbBatchService {
   rpc TriggerMbBatch(TriggerMbBatchRequest) returns (TriggerMbBatchResponse) {
     option (google.api.http) = {
       post: "/api/v1/finance/mb-batch/trigger"
+      body: "*"
+    };
+  }
+}
+
+// =============================================================================
+// MESSAGES — MB Cross Section (master) + MB Cross Section Factor (directed pairs)
+// =============================================================================
+
+// MbCrossSection is a master lookup entry for MB cross-section codes
+// (mst_mb_cross_section).
+message MbCrossSection {
+  // UUID primary key (mbcs_id).
+  string mbcs_id = 1;
+  // Unique cross-section code (mbcs_code, max 10 chars), e.g. RND / TBL / RSD.
+  string code = 2;
+  // Display name (mbcs_display_name).
+  string display_name = 3;
+  // Free-text description (mbcs_description).
+  string description = 4;
+  // Whether the record is active (mbcs_is_active).
+  bool is_active = 5;
+  // Display ordering hint (mbcs_display_order).
+  int32 display_order = 6;
+  // Audit metadata.
+  common.v1.AuditInfo audit = 7;
+}
+
+// MbCrossSectionFactor is one ORDERED (from_code -> to_code) LDR conversion
+// factor (mst_mb_cross_section_factor). The operation carries the direction of
+// the arithmetic and is not derivable from the factor alone.
+message MbCrossSectionFactor {
+  // UUID primary key (mbcf_id).
+  string mbcf_id = 1;
+  // Source cross-section code (mbcf_from_code).
+  string from_code = 2;
+  // Target cross-section code (mbcf_to_code).
+  string to_code = 3;
+  // Conversion factor (mbcf_factor), strictly greater than zero.
+  double factor = 4;
+  // Arithmetic direction (mbcf_operation): MULTIPLY or DIVIDE.
+  string operation = 5;
+  // Free-text note (mbcf_note).
+  string note = 6;
+  // Whether the record is active (mbcf_is_active).
+  bool is_active = 7;
+  // Audit metadata.
+  common.v1.AuditInfo audit = 8;
+}
+
+// CreateMbCrossSectionRequest is the request for creating an MB cross-section master record.
+message CreateMbCrossSectionRequest {
+  // Unique cross-section code (1-10 chars).
+  string code = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 10
+  }];
+  // Display name.
+  string display_name = 2 [(buf.validate.field).string.max_len = 50];
+  // Free-text description.
+  string description = 3 [(buf.validate.field).string.max_len = 200];
+  // Whether the record is active.
+  bool is_active = 4;
+  // Display ordering hint.
+  int32 display_order = 5;
+}
+
+// CreateMbCrossSectionResponse is the response for creating an MB cross-section master record.
+message CreateMbCrossSectionResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Created cross-section record.
+  MbCrossSection data = 2;
+}
+
+// GetMbCrossSectionRequest is the request for retrieving an MB cross-section master record by ID.
+message GetMbCrossSectionRequest {
+  // Cross-section UUID.
+  string mbcs_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetMbCrossSectionResponse is the response for retrieving an MB cross-section master record.
+message GetMbCrossSectionResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Cross-section record.
+  MbCrossSection data = 2;
+}
+
+// ListMbCrossSectionRequest is the request for listing MB cross-section master records.
+message ListMbCrossSectionRequest {
+  // Page number (>= 1).
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  // Page size (1-100).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Search across code and display_name.
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  // Sort field.
+  string sort_by = 4 [(buf.validate.field).string = {
+    in: [
+      "",
+      "code",
+      "display_name",
+      "display_order",
+      "created_at"
+    ]
+  }];
+  // Sort direction.
+  string sort_dir = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+  // Filter by active status.
+  ActiveFilter active_filter = 6;
+}
+
+// ListMbCrossSectionResponse is the response for listing MB cross-section master records.
+message ListMbCrossSectionResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Cross-section records.
+  repeated MbCrossSection data = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// UpdateMbCrossSectionRequest is the request for updating an MB cross-section master record.
+message UpdateMbCrossSectionRequest {
+  // Cross-section UUID.
+  string mbcs_id = 1 [(buf.validate.field).string.uuid = true];
+  // Updated display name.
+  string display_name = 2 [(buf.validate.field).string.max_len = 50];
+  // Updated description.
+  string description = 3 [(buf.validate.field).string.max_len = 200];
+  // Updated active status.
+  bool is_active = 4;
+  // Updated display ordering hint.
+  int32 display_order = 5;
+}
+
+// UpdateMbCrossSectionResponse is the response for updating an MB cross-section master record.
+message UpdateMbCrossSectionResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated cross-section record.
+  MbCrossSection data = 2;
+}
+
+// DeleteMbCrossSectionRequest is the request for deleting an MB cross-section master record.
+message DeleteMbCrossSectionRequest {
+  // Cross-section UUID.
+  string mbcs_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteMbCrossSectionResponse is the response for deleting an MB cross-section master record.
+message DeleteMbCrossSectionResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+}
+
+// CreateMbCrossSectionFactorRequest is the request for creating a cross-section conversion factor.
+message CreateMbCrossSectionFactorRequest {
+  // Source cross-section code (1-10 chars).
+  string from_code = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 10
+  }];
+  // Target cross-section code (1-10 chars).
+  string to_code = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 10
+  }];
+  // Conversion factor, strictly greater than zero.
+  double factor = 3 [(buf.validate.field).double.gt = 0];
+  // Arithmetic direction: MULTIPLY or DIVIDE.
+  string operation = 4 [(buf.validate.field).string = {
+    in: [
+      "MULTIPLY",
+      "DIVIDE"
+    ]
+  }];
+  // Free-text note.
+  string note = 5 [(buf.validate.field).string.max_len = 200];
+  // Whether the record is active.
+  bool is_active = 6;
+}
+
+// CreateMbCrossSectionFactorResponse is the response for creating a cross-section conversion factor.
+message CreateMbCrossSectionFactorResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Created factor record.
+  MbCrossSectionFactor data = 2;
+}
+
+// GetMbCrossSectionFactorRequest is the request for retrieving a cross-section conversion factor by ID.
+message GetMbCrossSectionFactorRequest {
+  // Factor UUID.
+  string mbcf_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetMbCrossSectionFactorResponse is the response for retrieving a cross-section conversion factor.
+message GetMbCrossSectionFactorResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Factor record.
+  MbCrossSectionFactor data = 2;
+}
+
+// ListMbCrossSectionFactorRequest is the request for listing cross-section conversion factors.
+message ListMbCrossSectionFactorRequest {
+  // Page number (>= 1).
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  // Page size (1-100).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Search across from_code and to_code.
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  // Sort field.
+  string sort_by = 4 [(buf.validate.field).string = {
+    in: [
+      "",
+      "from_code",
+      "to_code",
+      "factor",
+      "created_at"
+    ]
+  }];
+  // Sort direction.
+  string sort_dir = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+  // Filter by active status.
+  ActiveFilter active_filter = 6;
+  // Optional exact filter on the source cross-section code.
+  string from_code = 7 [(buf.validate.field).string.max_len = 10];
+  // Optional exact filter on the target cross-section code.
+  string to_code = 8 [(buf.validate.field).string.max_len = 10];
+}
+
+// ListMbCrossSectionFactorResponse is the response for listing cross-section conversion factors.
+message ListMbCrossSectionFactorResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Factor records.
+  repeated MbCrossSectionFactor data = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// UpdateMbCrossSectionFactorRequest is the request for updating a cross-section conversion factor.
+message UpdateMbCrossSectionFactorRequest {
+  // Factor UUID.
+  string mbcf_id = 1 [(buf.validate.field).string.uuid = true];
+  // Updated conversion factor, strictly greater than zero.
+  double factor = 2 [(buf.validate.field).double.gt = 0];
+  // Updated arithmetic direction: MULTIPLY or DIVIDE.
+  string operation = 3 [(buf.validate.field).string = {
+    in: [
+      "MULTIPLY",
+      "DIVIDE"
+    ]
+  }];
+  // Updated note.
+  string note = 4 [(buf.validate.field).string.max_len = 200];
+  // Updated active status.
+  bool is_active = 5;
+}
+
+// UpdateMbCrossSectionFactorResponse is the response for updating a cross-section conversion factor.
+message UpdateMbCrossSectionFactorResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated factor record.
+  MbCrossSectionFactor data = 2;
+}
+
+// DeleteMbCrossSectionFactorRequest is the request for deleting a cross-section conversion factor.
+message DeleteMbCrossSectionFactorRequest {
+  // Factor UUID.
+  string mbcf_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteMbCrossSectionFactorResponse is the response for deleting a cross-section conversion factor.
+message DeleteMbCrossSectionFactorResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+}
+
+// =============================================================================
+// SERVICE — MbCrossSection
+// =============================================================================
+
+// MbCrossSectionService manages MB cross-section master data.
+service MbCrossSectionService {
+  // CreateMbCrossSection creates a new MB cross-section master record.
+  rpc CreateMbCrossSection(CreateMbCrossSectionRequest) returns (CreateMbCrossSectionResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/master/mb-cross-sections"
+      body: "*"
+    };
+  }
+  // GetMbCrossSection retrieves an MB cross-section master record by ID.
+  rpc GetMbCrossSection(GetMbCrossSectionRequest) returns (GetMbCrossSectionResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/master/mb-cross-sections/{mbcs_id}"};
+  }
+  // ListMbCrossSection lists MB cross-section master records with search and pagination.
+  rpc ListMbCrossSection(ListMbCrossSectionRequest) returns (ListMbCrossSectionResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/master/mb-cross-sections"};
+  }
+  // UpdateMbCrossSection updates an existing MB cross-section master record.
+  rpc UpdateMbCrossSection(UpdateMbCrossSectionRequest) returns (UpdateMbCrossSectionResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/master/mb-cross-sections/{mbcs_id}"
+      body: "*"
+    };
+  }
+  // DeleteMbCrossSection deletes an MB cross-section master record.
+  rpc DeleteMbCrossSection(DeleteMbCrossSectionRequest) returns (DeleteMbCrossSectionResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/master/mb-cross-sections/{mbcs_id}"};
+  }
+}
+
+// =============================================================================
+// SERVICE — MbCrossSectionFactor
+// =============================================================================
+
+// MbCrossSectionFactorService manages MB cross-section conversion factors.
+service MbCrossSectionFactorService {
+  // CreateMbCrossSectionFactor creates a new cross-section conversion factor.
+  rpc CreateMbCrossSectionFactor(CreateMbCrossSectionFactorRequest) returns (CreateMbCrossSectionFactorResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/master/mb-cross-section-factors"
+      body: "*"
+    };
+  }
+  // GetMbCrossSectionFactor retrieves a cross-section conversion factor by ID.
+  rpc GetMbCrossSectionFactor(GetMbCrossSectionFactorRequest) returns (GetMbCrossSectionFactorResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/master/mb-cross-section-factors/{mbcf_id}"};
+  }
+  // ListMbCrossSectionFactor lists cross-section conversion factors with search and pagination.
+  rpc ListMbCrossSectionFactor(ListMbCrossSectionFactorRequest) returns (ListMbCrossSectionFactorResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/master/mb-cross-section-factors"};
+  }
+  // UpdateMbCrossSectionFactor updates an existing cross-section conversion factor.
+  rpc UpdateMbCrossSectionFactor(UpdateMbCrossSectionFactorRequest) returns (UpdateMbCrossSectionFactorResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/master/mb-cross-section-factors/{mbcf_id}"
+      body: "*"
+    };
+  }
+  // DeleteMbCrossSectionFactor deletes a cross-section conversion factor.
+  rpc DeleteMbCrossSectionFactor(DeleteMbCrossSectionFactorRequest) returns (DeleteMbCrossSectionFactorResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/master/mb-cross-section-factors/{mbcf_id}"};
+  }
+}
+
+// =============================================================================
+// MESSAGES — MBDozing (read-only calculator, no persistence)
+// =============================================================================
+
+// CalculateDozingRequest is the request for the stateless dozing (LDR) calculator.
+//
+// Modes: SCALE and XSECTION only.
+//
+// NOTE — STRENGTH mode is INTENTIONALLY ABSENT from the `in:` rule below even
+// though the consolidated design (§3.7) lists three modes. Decision gate G6-C3
+// put STRENGTH on hold: its formula/direction semantics are not yet settled, so
+// accepting the literal here would expose an RPC surface the backend cannot
+// honor. This is a DELIBERATE DIVERGENCE from the design document. Field
+// numbers 10, 11 and 12 are reserved below so STRENGTH can be added later
+// without renumbering.
+//
+// NOTE — mode SCALE is computed in pure Go (math.Sqrt); mst_formula is read
+// ONLY to populate formula_code and calculation_trace (decision K-16 / G19-SQRT).
+message CalculateDozingRequest {
+  // Reserved for the STRENGTH mode inputs (ldr_old, strength, direction).
+  // Held back by gate G6-C3 — numbers must NOT be reused.
+  reserved 10, 11, 12;
+
+  // Calculation mode: SCALE or XSECTION.
+  string mode = 1 [(buf.validate.field).string = {
+    in: [
+      "SCALE",
+      "XSECTION"
+    ]
+  }];
+  // Mode SCALE — reference LDR (dozing percentage) of the source recipe.
+  optional double ldr_ref = 2;
+  // Mode SCALE — reference denier, strictly greater than zero.
+  optional double denier_ref = 3 [(buf.validate.field).double.gt = 0];
+  // Mode SCALE — reference filament count, strictly greater than zero.
+  // Enforced here as well as in the domain layer (ErrZeroFilament).
+  optional int32 filament_ref = 4 [(buf.validate.field).int32.gt = 0];
+  // Mode SCALE — target denier, strictly greater than zero.
+  optional double denier_target = 5 [(buf.validate.field).double.gt = 0];
+  // Mode SCALE — target filament count, strictly greater than zero.
+  // Enforced here as well as in the domain layer (ErrZeroFilament).
+  optional int32 filament_target = 6 [(buf.validate.field).int32.gt = 0];
+  // Mode XSECTION — source LDR (dozing percentage).
+  optional double ldr_source = 7;
+  // Mode XSECTION — source cross-section code (mst_mb_cross_section.mbcs_code).
+  optional string from_cross_section = 8 [(buf.validate.field).string.max_len = 10];
+  // Mode XSECTION — target cross-section code (mst_mb_cross_section.mbcs_code).
+  optional string to_cross_section = 9 [(buf.validate.field).string.max_len = 10];
+}
+
+// CalculateDozingResponse is the response for the dozing (LDR) calculator.
+message CalculateDozingResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Resulting LDR. LEFT UNSET when the conversion factor is absent
+  // (factor_available = false). A 1.0 fallback is explicitly forbidden.
+  optional double result_ldr = 2;
+  // Formula identifier, e.g. F_MB_LDR_SCALE or F_MB_LDR_XSECTION.
+  string formula_code = 3;
+  // Human-readable substituted expression, for calculation transparency.
+  string calculation_trace = 4;
+  // False when no conversion factor exists for the requested pair; the UI must
+  // disable the apply action and show an explicit message.
+  bool factor_available = 5;
+}
+
+// PreviewDozingImpactRequest is the request for previewing products affected by
+// a dozing change. Spin path only.
+message PreviewDozingImpactRequest {
+  // Reserved: the direct yarn -> head path is never used by any product.
+  reserved 1;
+  reserved "mbh_id";
+
+  // MB spin UUID. Required.
+  string mbs_id = 2 [(buf.validate.field).string.uuid = true];
+  // Maximum number of rows to return. 0 means the server default (20).
+  int32 limit = 3 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 200
+  }];
+}
+
+// DozingImpactRow is a single product affected by a dozing change.
+message DozingImpactRow {
+  // Reserved: former via_param_code — always MB_SP_CODE, therefore redundant.
+  reserved 5;
+  reserved "via_param_code";
+
+  // Product system ID.
+  int64 cpm_product_sys_id = 1;
+  // Product code.
+  string cpm_product_code = 2;
+  // Product name.
+  string cpm_product_name = 3;
+  // Whether the product costing is locked.
+  bool cpm_is_locked = 4;
+  // Dozing value frozen on the product, when present.
+  optional double frozen_dozing = 6;
+}
+
+// PreviewDozingImpactResponse is the response for the dozing impact preview.
+message PreviewDozingImpactResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Affected product rows (Top-N, capped by the request limit).
+  repeated DozingImpactRow data = 2;
+  // Total number of affected products, before truncation.
+  int32 total_affected = 3;
+  // Number of affected products that are locked.
+  int32 total_locked = 4;
+  // True when data was truncated by the limit.
+  bool truncated = 5;
+  // Free-form note used to report data anomalies detected while resolving impact.
+  string note = 6;
+}
+
+// =============================================================================
+// SERVICE — MBDozing
+// =============================================================================
+
+// MBDozingService provides read-only MB dozing (LDR) calculation and impact
+// preview. No RPC in this service persists anything.
+service MBDozingService {
+  // CalculateDozing computes a target LDR without persisting anything.
+  rpc CalculateDozing(CalculateDozingRequest) returns (CalculateDozingResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-dozing/calculate"
+      body: "*"
+    };
+  }
+  // PreviewDozingImpact lists products that would be affected by a dozing change.
+  rpc PreviewDozingImpact(PreviewDozingImpactRequest) returns (PreviewDozingImpactResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-dozing/impact-preview"
       body: "*"
     };
   }

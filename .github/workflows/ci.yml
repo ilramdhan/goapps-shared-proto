@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  GO_VERSION: '1.24'
+
 jobs:
   lint-and-check:
     name: Lint & Breaking Changes
@@ -31,3 +34,72 @@ jobs:
         if: github.event_name == 'pull_request'
         continue-on-error: true
         run: buf breaking --against 'https://github.com/mutugading/goapps-shared-proto.git#branch=main'
+
+  generate-diff:
+    name: Generate Diff Check
+    runs-on: ubuntu-latest
+    # Guards against codegen drift: regenerates Go code with the PINNED plugin
+    # versions and fails if the result differs from what goapps-backend has
+    # committed. Without this, output depends on whatever each developer
+    # happens to have installed (see Makefile for the pinned versions).
+    steps:
+      - name: Checkout proto repo
+        uses: actions/checkout@v4
+        with:
+          path: goapps-shared-proto
+
+      # buf.gen.yaml writes Go output to ../goapps-backend/gen, so the backend
+      # repo must be checked out as a SIBLING directory or the diff would be
+      # taken against an empty tree and always pass.
+      - name: Checkout backend repo (codegen output target)
+        uses: actions/checkout@v4
+        with:
+          repository: mutugading/goapps-backend
+          path: goapps-backend
+          ref: main
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install pinned protoc plugins
+        working-directory: goapps-shared-proto
+        run: make tools
+
+      # No `buf dep update` and no `go mod tidy` here: both mutate lockfiles
+      # and would add noise unrelated to plugin drift.
+      - name: Generate Go code
+        working-directory: goapps-shared-proto
+        run: buf generate
+
+      - name: Fail if generated output drifted
+        working-directory: goapps-backend
+        run: |
+          if [ -n "$(git status --porcelain -- gen/)" ]; then
+            {
+              echo "### Generated code drift detected"
+              echo ""
+              echo "Regenerating with the pinned plugins produced output that differs"
+              echo "from \`goapps-backend@main:gen/\`. Two possible causes:"
+              echo ""
+              echo "1. **Plugin version drift** — someone generated with a plugin"
+              echo "   version other than the ones pinned in \`Makefile\`."
+              echo "2. **Pending regeneration** — this PR changes \`.proto\` files and"
+              echo "   \`goapps-backend\` has not regenerated + committed \`gen/\` yet."
+              echo ""
+              echo '```diff'
+              git --no-pager diff --stat -- gen/
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Generated code in goapps-backend/gen differs after regeneration"
+            git --no-pager diff --stat -- gen/
+            git status --porcelain -- gen/
+            exit 1
+          fi
+          echo "✅ Generated output matches goapps-backend@main"

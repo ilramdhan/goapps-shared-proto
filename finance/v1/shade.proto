@@ -1,0 +1,228 @@
+syntax = "proto3";
+
+package finance.v1;
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "finance/v1/uom.proto";
+import "google/api/annotations.proto";
+
+// =============================================================================
+// ShadeService — master shade CRUD (R8), backed by cost_erp_shade.
+//
+// Rows are normally sync-sourced from Oracle MGTDAT.OM_GRADE_CODE_2 via
+// SyncShades, but a finance user may also create one by hand (source MANUAL)
+// for a shade Orion does not carry yet. SyncShades never overwrites a MANUAL
+// row — see the ces_shade_source column (migration 000493).
+//
+// There is deliberately no hard-delete RPC: DeactivateShade only flips
+// ces_is_active to false, matching the ppc customer / cost-product-master
+// deactivate-not-delete convention used elsewhere in this service.
+// =============================================================================
+
+// Shade represents one row of the shade master (cost_erp_shade).
+message Shade {
+  // Numeric primary key (ces_shade_id).
+  int64 shade_id = 1;
+  // Natural key, normalized upper-case (ces_shade_code). Immutable after creation.
+  string shade_code = 2;
+  // Display name (ces_shade_name).
+  string shade_name = 3;
+  // Optional short name (ces_shade_short_name).
+  string shade_short_name = 4;
+  // Whether the shade is active (not frozen in Orion).
+  bool is_active = 5;
+  // Provenance: "ORACLE" (synced) or "MANUAL" (hand-authored).
+  string shade_source = 6;
+  // Oracle-side creation timestamp (ISO 8601), empty if unknown or MANUAL.
+  string source_created_at = 7;
+  // Oracle-side update timestamp (ISO 8601), empty if unknown or MANUAL.
+  string source_updated_at = 8;
+  // Oracle-side creator user id, empty if unknown or MANUAL.
+  string source_created_by = 9;
+  // Oracle-side updater user id, empty if unknown or MANUAL.
+  string source_updated_by = 10;
+  // Timestamp of the last successful Oracle sync (ISO 8601), empty if never synced.
+  string synced_at = 11;
+  // Audit metadata.
+  common.v1.AuditInfo audit = 16;
+}
+
+// CreateShadeRequest creates a hand-authored (MANUAL) shade.
+message CreateShadeRequest {
+  // Unique code (max 60 chars). Normalized to upper case server-side.
+  string shade_code = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 60
+  }];
+  // Display name (max 300 chars).
+  string shade_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 300
+  }];
+  // Optional short name (max 60 chars).
+  string shade_short_name = 3 [(buf.validate.field).string.max_len = 60];
+}
+
+// CreateShadeResponse is the response for creating a Shade.
+message CreateShadeResponse {
+  common.v1.BaseResponse base = 1;
+  Shade data = 2;
+}
+
+// GetShadeRequest retrieves a Shade by its numeric id.
+message GetShadeRequest {
+  int64 shade_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+// GetShadeResponse is the response for retrieving a Shade.
+message GetShadeResponse {
+  common.v1.BaseResponse base = 1;
+  Shade data = 2;
+}
+
+// UpdateShadeRequest updates a Shade. The code is immutable — it is the key
+// the Oracle sync upserts on. Setting is_active=false is also the manual
+// deactivate path (equivalent to DeactivateShade).
+message UpdateShadeRequest {
+  int64 shade_id = 1 [(buf.validate.field).int64.gt = 0];
+  // Updated display name (max 300 chars).
+  optional string shade_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 300
+  }];
+  // Updated short name (max 60 chars).
+  optional string shade_short_name = 3 [(buf.validate.field).string.max_len = 60];
+  // Updated active status.
+  optional bool is_active = 4;
+}
+
+// UpdateShadeResponse is the response for updating a Shade.
+message UpdateShadeResponse {
+  common.v1.BaseResponse base = 1;
+  Shade data = 2;
+}
+
+// DeactivateShadeRequest soft-deactivates a Shade (ces_is_active = false).
+// This is not a delete — the row and its history are kept.
+message DeactivateShadeRequest {
+  int64 shade_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+// DeactivateShadeResponse is the response for deactivating a Shade.
+message DeactivateShadeResponse {
+  common.v1.BaseResponse base = 1;
+  Shade data = 2;
+}
+
+// ListShadesRequest lists shades with search, filter, and pagination.
+message ListShadesRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Full-text search across code, name, and short name.
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  // Filter by active status.
+  ActiveFilter active_filter = 4;
+  // Filter by provenance. Empty = both.
+  string source_filter = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "ORACLE",
+      "MANUAL"
+    ]
+  }];
+  // Sort field.
+  string sort_by = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "code",
+      "name",
+      "short_name",
+      "is_active",
+      "source",
+      "synced_at",
+      "created_at"
+    ]
+  }];
+  // Sort direction.
+  string sort_order = 7 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+// ListShadesResponse is the response for listing Shades.
+message ListShadesResponse {
+  common.v1.BaseResponse base = 1;
+  repeated Shade data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// SyncShadesRequest triggers an Oracle-to-Postgres shade master sync. It
+// fetches the full shade master from MGTDAT.OM_GRADE_CODE_2 and upserts into
+// cost_erp_shade, keyed on shade_code. Rows a finance user created or edited
+// by hand (source MANUAL) are never overwritten — see decideUpsertAction in
+// the Postgres repository. Runs synchronously; there is no background job or
+// polling — the RPC returns once the sync completes.
+message SyncShadesRequest {}
+
+// SyncShadesResponse reports the outcome of one sync run.
+message SyncShadesResponse {
+  common.v1.BaseResponse base = 1;
+  // Total rows read from Oracle.
+  int32 total_rows = 2;
+  // Rows newly inserted.
+  int32 inserted = 3;
+  // Rows refreshed from Oracle.
+  int32 updated = 4;
+  // Rows left untouched (MANUAL-owned, or an empty code).
+  int32 skipped = 5;
+  // Wall-clock duration of the sync, in milliseconds.
+  int64 duration_ms = 6;
+}
+
+// ShadeService manages the finance shade master (cost_erp_shade): Oracle-synced
+// rows plus a manual-CRUD escape hatch, per R8.
+service ShadeService {
+  // CreateShade creates a hand-authored (MANUAL) shade.
+  rpc CreateShade(CreateShadeRequest) returns (CreateShadeResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/shades"
+      body: "*"
+    };
+  }
+  // GetShade retrieves a Shade by id.
+  rpc GetShade(GetShadeRequest) returns (GetShadeResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/shades/{shade_id}"};
+  }
+  // UpdateShade updates a Shade's name, short name, and/or active status.
+  rpc UpdateShade(UpdateShadeRequest) returns (UpdateShadeResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/shades/{shade_id}"
+      body: "*"
+    };
+  }
+  // DeactivateShade soft-deactivates a Shade (ces_is_active = false). Not a
+  // hard delete — the row and its history are retained.
+  rpc DeactivateShade(DeactivateShadeRequest) returns (DeactivateShadeResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/shades/{shade_id}"};
+  }
+  // ListShades lists shades with search, filter, and pagination.
+  rpc ListShades(ListShadesRequest) returns (ListShadesResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/shades"};
+  }
+  // SyncShades pulls the latest shade master from Oracle and upserts it into
+  // cost_erp_shade, skipping rows a finance user owns manually.
+  rpc SyncShades(SyncShadesRequest) returns (SyncShadesResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/shades/sync"
+      body: "*"
+    };
+  }
+}
