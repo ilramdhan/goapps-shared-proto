@@ -1881,6 +1881,14 @@ message MBSpin {
   // Fix/actual marker for the dozing value. Absent means "unknown", which the
   // domain treats as FIXED (recalc-safe). true = fixed, false = computed.
   optional bool mbs_dozing_is_fixed = 18;
+  // Current LDR provenance: NOT_CALCULATED, CALCULATED, or ACTUAL. Mirrors mbs_ldr_type.
+  string mbs_ldr_type = 19;
+  // System-calculated LDR percentage, before any manual adjustment. Mirrors mbs_ldr_calculated_pct.
+  optional double mbs_ldr_calculated_pct = 20;
+  // Manual adjustment added on top of the calculated LDR. Mirrors mbs_ldr_adjustment_pct.
+  optional double mbs_ldr_adjustment_pct = 21;
+  // True when the LDR is locked to an actual/manual value (mbs_ldr_type is then ACTUAL). Mirrors mbs_ldr_is_actual.
+  bool mbs_ldr_is_actual = 22;
 }
 
 // CreateMBSpinRequest is the request for creating an MB Spin record.
@@ -1981,6 +1989,12 @@ message UpdateMBSpinRequest {
   optional bool mbs_ldr_is_fixed = 15;
   // Optional fix/actual marker for dozing. Absent = leave unchanged.
   optional bool mbs_dozing_is_fixed = 16;
+  // Optional new LDR adjustment percentage. Absent = leave unchanged. Rejected by
+  // the domain if the spin's LDR is currently locked as Actual — unlock first.
+  optional double mbs_ldr_adjustment_pct = 17;
+  // Optional lock/unlock instruction for LDR Actual status. true = lock as
+  // Actual, false = unlock. Absent = no-op (leave the lock state untouched).
+  optional bool mbs_ldr_lock_actual = 18;
 }
 
 // UpdateMBSpinResponse is the response for updating an MB Spin record.
