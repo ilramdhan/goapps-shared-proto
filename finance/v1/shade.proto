@@ -44,6 +44,9 @@ message Shade {
   string source_updated_by = 10;
   // Timestamp of the last successful Oracle sync (ISO 8601), empty if never synced.
   string synced_at = 11;
+  // Count of rows referencing this shade's code across mst_mb_head, mst_mb_head_shade,
+  // and mst_mb_spin (soft-delete excluded). Read-only, derived — not settable.
+  int32 usage_count = 12;
   // Audit metadata.
   common.v1.AuditInfo audit = 16;
 }
