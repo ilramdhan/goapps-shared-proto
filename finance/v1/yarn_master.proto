@@ -1889,6 +1889,8 @@ message MBSpin {
   optional double mbs_ldr_adjustment_pct = 21;
   // True when the LDR is locked to an actual/manual value (mbs_ldr_type is then ACTUAL). Mirrors mbs_ldr_is_actual.
   bool mbs_ldr_is_actual = 22;
+  // Optional Oracle CMBS_VS_NUMBER — VS reference number, copied from the parent MB Head's mbh_vs_number.
+  optional string mbs_vs_number = 23 [(buf.validate.field).string.max_len = 50];
 }
 
 // CreateMBSpinRequest is the request for creating an MB Spin record.
@@ -1926,6 +1928,8 @@ message CreateMBSpinRequest {
   optional bool mbs_ldr_is_fixed = 14;
   // Optional fix/actual marker for dozing. Absent = unknown (treated as fixed).
   optional bool mbs_dozing_is_fixed = 15;
+  // Optional VS reference number (free text, e.g. "NA").
+  optional string mbs_vs_number = 16 [(buf.validate.field).string.max_len = 50];
 }
 
 // CreateMBSpinResponse is the response for creating an MB Spin record.
@@ -1995,6 +1999,8 @@ message UpdateMBSpinRequest {
   // Optional lock/unlock instruction for LDR Actual status. true = lock as
   // Actual, false = unlock. Absent = no-op (leave the lock state untouched).
   optional bool mbs_ldr_lock_actual = 18;
+  // Optional VS reference number. Absent = leave unchanged.
+  optional string mbs_vs_number = 19 [(buf.validate.field).string.max_len = 50];
 }
 
 // UpdateMBSpinResponse is the response for updating an MB Spin record.
