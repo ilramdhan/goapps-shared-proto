@@ -40,6 +40,30 @@ message CostProductParameterValue {
   string filled_by = 31;
 }
 
+// MBSpinCandidate is one possible mst_mb_spin match behind an ambiguous
+// MB_SPIN lookup value_text (an ORION item code shared by more than one
+// mst_mb_spin row). Carries just enough disambiguating detail — mirrors the
+// columns already shown in the MB_SPIN combobox extra-detail row — for the
+// user to tell the candidates apart before picking one.
+message MBSpinCandidate {
+  // Permanent mst_mb_spin.mbs_id UUID — this is what gets saved as
+  // mb_spin_id_override when the user picks this candidate, never the
+  // (possibly ambiguous) ORION item code.
+  string mbs_id = 1;
+  string orion_item_code = 2;
+  string mgt_name = 3;
+  // Denier as a decimal string; empty = not set.
+  string denier = 4;
+  int32 filament = 5;
+  bool has_filament = 6;
+  // "LDR Rencana" — planned LDR, as a decimal string; empty = not set.
+  string ldr_prsn = 7;
+  // "LDR Aktual" — authoritative actual LDR (see mbs_run_ldr_pct), as a
+  // decimal string; empty = not set.
+  string run_ldr_pct = 8;
+  string status = 9;
+}
+
 // RequiredParamEntry surfaces a required mst_parameter row that may or may not
 // yet have a value bound for the product (used by ListProductRequiredParams).
 message RequiredParamEntry {
@@ -73,6 +97,12 @@ message RequiredParamEntry {
   // (an MB_SPIN lookup param with a non-empty value_text). False means the
   // count is not applicable — do not interpret 0 as "not applicable".
   bool has_mb_spin_candidate_count = 16;
+  // Full candidate list backing mb_spin_candidate_count, populated ONLY when
+  // the row is actually ambiguous (has_mb_spin_candidate_count is true and
+  // mb_spin_candidate_count > 1). Empty in every other case — including the
+  // "already resolved" and "zero matches" states — so callers should gate on
+  // the count fields above rather than on this list's emptiness alone.
+  repeated MBSpinCandidate mb_spin_candidates = 17;
   // Existing value (zero/empty when not yet bound).
   bool has_value = 20;
   string value_numeric = 21;
@@ -111,6 +141,14 @@ message UpsertProductParamValueRequest {
   // callers must use has_value_flag to opt in.
   bool value_flag = 5;
   bool has_value_flag = 6;
+  // Explicit mst_mb_spin.mbs_id UUID chosen by the user from the
+  // MBSpinCandidate list for an ambiguous MB_SPIN lookup value. When set,
+  // this is written directly to cpp_value_mb_spin_id and the normal
+  // ORION-code ambiguity resolver (which requires an exact single match) is
+  // skipped entirely — the user's explicit pick always wins. value_text is
+  // still saved as-is alongside it (companion column, see
+  // cpp_value_mb_spin_id / migration 000494).
+  optional string mb_spin_id_override = 7 [(buf.validate.field).string.uuid = true];
 }
 
 message UpsertProductParamValueResponse {
