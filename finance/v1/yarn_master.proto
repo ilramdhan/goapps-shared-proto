@@ -1891,6 +1891,12 @@ message MBSpin {
   bool mbs_ldr_is_actual = 22;
   // Optional Oracle CMBS_VS_NUMBER — VS reference number, copied from the parent MB Head's mbh_vs_number.
   optional string mbs_vs_number = 23 [(buf.validate.field).string.max_len = 50];
+  // Shade code, copied down from MB Head at auto-gen. Read-only lineage field.
+  string mbs_shade_code = 24;
+  // Shade name, copied down from MB Head at auto-gen. Read-only lineage field.
+  string mbs_shade_name = 25;
+  // Cross section, copied down from MB Head at auto-gen. Read-only lineage field.
+  string mbs_cross_section = 26;
 }
 
 // CreateMBSpinRequest is the request for creating an MB Spin record.
@@ -2009,6 +2015,22 @@ message UpdateMBSpinResponse {
   common.v1.BaseResponse base = 1;
   // Updated MB Spin data.
   MBSpin data = 2;
+  // Child spins deliberately left untouched by the recalc pass (rule A7).
+  // Empty when every candidate child was recalculated.
+  repeated MBSpinRecalcSkipped skipped = 3;
+  // Number of skipped child spins. Equals len(skipped) — sent explicitly so a
+  // caller that ignores the detail rows still gets the count.
+  int32 skipped_count = 4;
+  // Products that WOULD be affected, Top-N. ⛔ NOT a recalculation result (D24).
+  // Reuses DozingImpactRow, the same row type PreviewDozingImpact returns, so
+  // the UI can render both with one component.
+  repeated DozingImpactRow impact_preview = 5;
+  // Total number of affected products, before truncation.
+  int32 impact_total_affected = 6;
+  // Number of affected products whose costing is locked.
+  int32 impact_total_locked = 7;
+  // True when impact_preview was truncated by the server's row cap.
+  bool impact_truncated = 8;
 }
 
 // DeleteMBSpinRequest is the request for soft-deleting an MB Spin record.
