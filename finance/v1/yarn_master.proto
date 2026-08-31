@@ -2015,6 +2015,22 @@ message UpdateMBSpinResponse {
   common.v1.BaseResponse base = 1;
   // Updated MB Spin data.
   MBSpin data = 2;
+  // Child spins deliberately left untouched by the recalc pass (rule A7).
+  // Empty when every candidate child was recalculated.
+  repeated MBSpinRecalcSkipped skipped = 3;
+  // Number of skipped child spins. Equals len(skipped) — sent explicitly so a
+  // caller that ignores the detail rows still gets the count.
+  int32 skipped_count = 4;
+  // Products that WOULD be affected, Top-N. ⛔ NOT a recalculation result (D24).
+  // Reuses DozingImpactRow, the same row type PreviewDozingImpact returns, so
+  // the UI can render both with one component.
+  repeated DozingImpactRow impact_preview = 5;
+  // Total number of affected products, before truncation.
+  int32 impact_total_affected = 6;
+  // Number of affected products whose costing is locked.
+  int32 impact_total_locked = 7;
+  // True when impact_preview was truncated by the server's row cap.
+  bool impact_truncated = 8;
 }
 
 // DeleteMBSpinRequest is the request for soft-deleting an MB Spin record.
