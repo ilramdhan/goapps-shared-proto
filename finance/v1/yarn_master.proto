@@ -1891,6 +1891,12 @@ message MBSpin {
   bool mbs_ldr_is_actual = 22;
   // Optional Oracle CMBS_VS_NUMBER — VS reference number, copied from the parent MB Head's mbh_vs_number.
   optional string mbs_vs_number = 23 [(buf.validate.field).string.max_len = 50];
+  // Shade code, copied down from MB Head at auto-gen. Read-only lineage field.
+  string mbs_shade_code = 24;
+  // Shade name, copied down from MB Head at auto-gen. Read-only lineage field.
+  string mbs_shade_name = 25;
+  // Cross section, copied down from MB Head at auto-gen. Read-only lineage field.
+  string mbs_cross_section = 26;
 }
 
 // CreateMBSpinRequest is the request for creating an MB Spin record.
