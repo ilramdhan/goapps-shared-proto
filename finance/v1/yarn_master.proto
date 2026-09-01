@@ -1853,6 +1853,145 @@ message RejectUnlockMBHeadResponse {
   MBHead data = 2;
 }
 
+// BulkForceUnvalidateMBHeadRequest is the request for force-transitioning a batch
+// of MB Heads from VALIDATED directly back to DRAFT in one step, bypassing the
+// normal RequestUnlockMBHead/GrantUnlockMBHead two-step flow. Intended for Super
+// Admin bulk re-triggering of the validate lifecycle.
+message BulkForceUnvalidateMBHeadRequest {
+  // MB Head UUIDs to force-unvalidate. 1-500 items, each a valid UUID.
+  repeated string mbh_ids = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 500
+    items: {
+      string: {uuid: true}
+    }
+  }];
+  // Reason for force-unvalidating. Optional.
+  string reason = 2 [(buf.validate.field).string.max_len = 500];
+}
+
+// BulkForceUnvalidateMBHeadResponse is the response for queuing a bulk
+// force-unvalidate job. The job runs asynchronously; poll GetBulkMBHeadJobStatus
+// for progress.
+message BulkForceUnvalidateMBHeadResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Queued job summary (job_id, job_code, status, progress counters).
+  BulkMBHeadJobInfo data = 2;
+}
+
+// BulkSubmitMBHeadRequest is the request for submitting a batch of MB Heads for
+// approval in one call.
+message BulkSubmitMBHeadRequest {
+  // MB Head UUIDs to submit. 1-500 items, each a valid UUID.
+  repeated string mbh_ids = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 500
+    items: {
+      string: {uuid: true}
+    }
+  }];
+}
+
+// BulkSubmitMBHeadResponse is the response for queuing a bulk submit job. The job
+// runs asynchronously; poll GetBulkMBHeadJobStatus for progress.
+message BulkSubmitMBHeadResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Queued job summary (job_id, job_code, status, progress counters).
+  BulkMBHeadJobInfo data = 2;
+}
+
+// BulkValidateMBHeadRequest is the request for validating a batch of approved MB
+// Heads in one call, freezing each one's cost and param snapshot.
+message BulkValidateMBHeadRequest {
+  // MB Head UUIDs to validate. 1-500 items, each a valid UUID.
+  repeated string mbh_ids = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 500
+    items: {
+      string: {uuid: true}
+    }
+  }];
+}
+
+// BulkValidateMBHeadResponse is the response for queuing a bulk validate job. The
+// job runs asynchronously; poll GetBulkMBHeadJobStatus for progress.
+message BulkValidateMBHeadResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Queued job summary (job_id, job_code, status, progress counters).
+  BulkMBHeadJobInfo data = 2;
+}
+
+// BulkMBHeadJobInfo summarizes a freshly-queued bulk MB Head lifecycle job.
+message BulkMBHeadJobInfo {
+  // job_execution.job_id (UUID).
+  string job_id = 1;
+  // Human-readable code (e.g. "MBH_BULK-202609-001").
+  string job_code = 2;
+  // Initial status, typically "QUEUED".
+  string status = 3;
+  // Total MB Heads expected to be processed by this job.
+  int32 total_children = 4;
+  // MB Heads processed successfully so far.
+  int32 completed_children = 5;
+  // MB Heads that failed so far.
+  int32 failed_children = 6;
+}
+
+// GetBulkMBHeadJobStatusRequest identifies the bulk MB Head lifecycle job whose
+// live status/progress should be polled while it is still running.
+message GetBulkMBHeadJobStatusRequest {
+  // job_execution.job_id (UUID).
+  string job_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetBulkMBHeadJobStatusResponse reports the bulk job's current status and live
+// child-completion counters.
+message GetBulkMBHeadJobStatusResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // job_execution.job_id (UUID).
+  string job_id = 2;
+  // Human-readable code (e.g. "MBH_BULK-202609-001").
+  string job_code = 3;
+  // Current status (e.g. "QUEUED", "PROCESSING", "DONE", "FAILED", "PARTIAL").
+  string status = 4;
+  // Total MB Heads expected to be processed by this job.
+  int32 total_children = 5;
+  // MB Heads processed successfully so far.
+  int32 completed_children = 6;
+  // MB Heads that failed so far.
+  int32 failed_children = 7;
+}
+
+// ListBulkMBHeadJobFailuresRequest identifies the bulk MB Head lifecycle job
+// whose per-item failures should be listed.
+message ListBulkMBHeadJobFailuresRequest {
+  // job_execution.job_id (UUID).
+  string job_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// ListBulkMBHeadJobFailuresResponse lists every MB Head that failed within a
+// bulk job, with its error message.
+message ListBulkMBHeadJobFailuresResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Failed items, in the order the worker processed them.
+  repeated BulkMBHeadJobFailure failures = 2;
+}
+
+// BulkMBHeadJobFailure describes one MB Head that failed within a bulk job.
+message BulkMBHeadJobFailure {
+  // MB Head UUID that failed.
+  string mbh_id = 1;
+  // MB Head's cost code / identifier, for display without a follow-up lookup.
+  string mb_costing = 2;
+  // Human-readable error message explaining the failure.
+  string error_message = 3;
+}
+
 // =============================================================================
 // MESSAGES — MB Spin
 // =============================================================================
@@ -2611,6 +2750,50 @@ service MBHeadService {
       post: "/api/v1/finance/mb-heads/{mbh_id}/reject-unlock"
       body: "*"
     };
+  }
+  // BulkForceUnvalidateMBHead force-transitions up to 500 MB Heads from VALIDATED
+  // directly back to DRAFT in one step, bypassing the normal two-step
+  // RequestUnlockMBHead/GrantUnlockMBHead flow. Intended for Super Admin bulk
+  // re-triggering of the validate lifecycle. Runs asynchronously via a job: the
+  // response returns immediately with job info while the per-item work happens in
+  // a background worker — poll GetBulkMBHeadJobStatus for progress.
+  rpc BulkForceUnvalidateMBHead(BulkForceUnvalidateMBHeadRequest) returns (BulkForceUnvalidateMBHeadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-heads/bulk-unvalidate"
+      body: "*"
+    };
+  }
+  // BulkSubmitMBHead submits up to 500 MB Heads for approval in one request. Runs
+  // asynchronously via a job: the response returns immediately with job info while
+  // the per-item work happens in a background worker — poll GetBulkMBHeadJobStatus
+  // for progress.
+  rpc BulkSubmitMBHead(BulkSubmitMBHeadRequest) returns (BulkSubmitMBHeadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-heads/bulk-submit"
+      body: "*"
+    };
+  }
+  // BulkValidateMBHead validates up to 500 approved MB Heads in one request,
+  // freezing each one's cost and param snapshot. Runs asynchronously via a job: the
+  // response returns immediately with job info while the per-item work happens in
+  // a background worker — poll GetBulkMBHeadJobStatus for progress.
+  rpc BulkValidateMBHead(BulkValidateMBHeadRequest) returns (BulkValidateMBHeadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-heads/bulk-validate"
+      body: "*"
+    };
+  }
+  // GetBulkMBHeadJobStatus polls the live status and progress counters of a bulk
+  // MB Head lifecycle job (BulkForceUnvalidateMBHead, BulkSubmitMBHead, or
+  // BulkValidateMBHead) while it is still running.
+  rpc GetBulkMBHeadJobStatus(GetBulkMBHeadJobStatusRequest) returns (GetBulkMBHeadJobStatusResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/mb-heads/bulk-jobs/{job_id}/status"};
+  }
+  // ListBulkMBHeadJobFailures lists the per-item failures recorded by a finished
+  // (or in-progress) bulk MB Head lifecycle job, so the caller can see which MB
+  // Heads failed and why.
+  rpc ListBulkMBHeadJobFailures(ListBulkMBHeadJobFailuresRequest) returns (ListBulkMBHeadJobFailuresResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/mb-heads/bulk-jobs/{job_id}/failures"};
   }
 }
 
