@@ -1789,6 +1789,22 @@ message ReturnMBHeadToDraftResponse {
   MBHead data = 2;
 }
 
+// UnrevokeMBHeadRequest is the request for unrevoking a revoked MB Head back to draft.
+message UnrevokeMBHeadRequest {
+  // MB Head UUID.
+  string mbh_id = 1 [(buf.validate.field).string.uuid = true];
+  // Reason for unrevoking. Optional; when empty the existing state_reason is preserved.
+  string reason = 2;
+}
+
+// UnrevokeMBHeadResponse is the response for unrevoking an MB Head.
+message UnrevokeMBHeadResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated MB Head data.
+  MBHead data = 2;
+}
+
 // RequestUnlockMBHeadRequest is the request for asking that a locked MB Head be unlocked (P10).
 message RequestUnlockMBHeadRequest {
   // MB Head UUID.
@@ -2561,6 +2577,13 @@ service MBHeadService {
   rpc ReturnMBHeadToDraft(ReturnMBHeadToDraftRequest) returns (ReturnMBHeadToDraftResponse) {
     option (google.api.http) = {
       post: "/api/v1/finance/mb-heads/{mbh_id}/return-to-draft"
+      body: "*"
+    };
+  }
+  // UnrevokeMBHead returns a revoked MB Head back to draft. Reason is optional; when empty the existing state_reason is preserved.
+  rpc UnrevokeMBHead(UnrevokeMBHeadRequest) returns (UnrevokeMBHeadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/mb-heads/{mbh_id}/unrevoke"
       body: "*"
     };
   }
