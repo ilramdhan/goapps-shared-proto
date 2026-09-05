@@ -35,10 +35,10 @@ enum RMGroupFlag {
 }
 
 // RMValuationFlag selects which computed rate becomes `cost_val` in the
-// RM Cost row. UNSPECIFIED behaves as AUTO (CL → SL → FL fallback, where
+// RM Cost row. UNSPECIFIED behaves as AUTO (CL → SL → FL → PR fallback, where
 // FL incorporates the per-detail valuation_default_value).
 enum RMValuationFlag {
-  // Default zero value. Treated as AUTO (CL→SL→FL fallback).
+  // Default zero value. Treated as AUTO (CL→SL→FL→PR fallback).
   RM_VALUATION_FLAG_UNSPECIFIED = 0;
   // Use Consumption Rate (CR) — group-total cons_val / cons_qty.
   RM_VALUATION_FLAG_CR = 1;
@@ -52,6 +52,10 @@ enum RMValuationFlag {
   RM_VALUATION_FLAG_SL = 5;
   // Use Fix Landed Cost (FL) — MAX of per-detail FL.
   RM_VALUATION_FLAG_FL = 6;
+  // AUTO resolved to nothing — every cascade candidate (CL/SL/FL/PR) was zero,
+  // so there is no price source for this period. Never user-selectable; it is
+  // only ever written by the engine as the resolved `valuation_flag_used`.
+  RM_VALUATION_FLAG_NONE = 7;
 }
 
 // RMMarketingFlag selects which computed marketing projection becomes
@@ -65,6 +69,11 @@ enum RMMarketingFlag {
   RM_MARKETING_FLAG_PP = 2;
   // Projection Fix Value Landed Cost.
   RM_MARKETING_FLAG_FP = 3;
+  // AUTO resolved to nothing — every cascade candidate (SP/PP/FP) was zero,
+  // so there is no marketing projection for this period. Never
+  // user-selectable; it is only ever written by the engine as the resolved
+  // `marketing_flag_used`.
+  RM_MARKETING_FLAG_NONE = 4;
 }
 
 // RemoveItemsMode controls how RemoveItems disposes of detail rows.
