@@ -309,6 +309,8 @@ message CreateRMGroupResponse {
 message GetRMGroupRequest {
   // Head UUID.
   string group_head_id = 1 [(buf.validate.field).string.uuid = true];
+  // Optional period (YYYYMM) for period-scoped read; empty means anchor/latest read.
+  optional string period = 2 [(buf.validate.field).string.pattern = "^[0-9]{6}$"];
 }
 
 // Get response.
@@ -380,6 +382,8 @@ message UpdateRMGroupRequest {
   bool clear_marketing_freight_rate = 23;
   bool clear_marketing_anti_dumping_pct = 24;
   bool clear_marketing_default_value = 25;
+  // Period (YYYYMM) this update targets.
+  string period = 26 [(buf.validate.field).string.pattern = "^[0-9]{6}$"];
 }
 
 // Update response.
@@ -557,6 +561,8 @@ message UpdateGroupItemRequest {
   bool clear_valuation_duty_pct = 12;
   bool clear_valuation_transport_rate = 13;
   bool clear_valuation_default_value = 14;
+  // Period (YYYYMM) this update targets.
+  string period = 15 [(buf.validate.field).string.pattern = "^[0-9]{6}$"];
 }
 
 // V2: Update one detail response.
