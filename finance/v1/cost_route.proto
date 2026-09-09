@@ -239,6 +239,13 @@ service CostRouteService {
   }
 }
 
+// DuplicateRouteTargetMode selects what DuplicateRoute duplicates onto.
+enum DuplicateRouteTargetMode {
+  DUPLICATE_ROUTE_TARGET_MODE_UNSPECIFIED = 0; // Default -- treated as NEW_PRODUCT for backward compatibility.
+  DUPLICATE_ROUTE_TARGET_MODE_NEW_PRODUCT = 1; // Existing behavior: duplicate onto brand-new product(s).
+  DUPLICATE_ROUTE_TARGET_MODE_SAME_PRODUCT = 2; // Fork the route graph only, keeping the same product.
+}
+
 message DuplicateRouteRequest {
   int64 head_id = 1 [(buf.validate.field).int64.gt = 0];
   bool include_routing = 2;
@@ -247,6 +254,8 @@ message DuplicateRouteRequest {
   bool include_values = 5;
   string new_code_prefix = 6 [(buf.validate.field).string.max_len = 40];
   int64 linked_request_id = 7;
+  // Defaults to NEW_PRODUCT when unspecified, matching pre-existing behavior.
+  DuplicateRouteTargetMode target_mode = 8;
 }
 message DuplicateRouteResponse {
   common.v1.BaseResponse base = 1;
