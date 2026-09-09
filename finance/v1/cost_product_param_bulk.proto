@@ -1,0 +1,182 @@
+syntax = "proto3";
+
+package finance.v1;
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "google/api/annotations.proto";
+
+// =============================================================================
+// MESSAGES — Bulk operation entries (BulkEditProductParams)
+// =============================================================================
+
+// AddApplicableParamOp marks a parameter as applicable to every targeted product.
+message AddApplicableParamOp {
+  string param_id = 1 [(buf.validate.field).string.uuid = true];
+  bool is_required = 2;
+  // 0 means inherit mst_parameter.display_order.
+  int32 display_order = 3 [(buf.validate.field).int32.gte = 0];
+}
+
+// RemoveApplicableParamOp removes a parameter (and its value) from every
+// targeted product it currently applies to.
+message RemoveApplicableParamOp {
+  string param_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// UpsertParamValueOp sets a param value on every targeted product that has
+// the parameter applicable — see BulkEditProductParamsRequest.skip_missing_applicable
+// for the behavior when a targeted product does not yet have it applicable.
+message UpsertParamValueOp {
+  string param_id = 1 [(buf.validate.field).string.uuid = true];
+  // Value as string (decimals as text for precision). One of these must be set.
+  string value_numeric = 2;
+  string value_text = 3;
+  // value_flag is a real bool — we cannot distinguish "unset" from FALSE, so
+  // callers must use has_value_flag to opt in.
+  bool value_flag = 4;
+  bool has_value_flag = 5;
+}
+
+// BulkParamOperation is one step applied, in order, to every targeted product.
+message BulkParamOperation {
+  oneof op {
+    AddApplicableParamOp add_applicable = 1;
+    RemoveApplicableParamOp remove_applicable = 2;
+    UpsertParamValueOp upsert_value = 3;
+  }
+}
+
+// =============================================================================
+// MESSAGES — BulkEditProductParams
+// =============================================================================
+
+// BulkEditProductParamsRequest applies a list of param operations, in order,
+// to a batch of products in one call.
+message BulkEditProductParamsRequest {
+  // cost_product_master.cpm_product_sys_id values to edit. 1-500 items.
+  repeated int64 product_sys_ids = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 500
+  }];
+  // Operations applied in order to every targeted product.
+  repeated BulkParamOperation operations = 2 [(buf.validate.field).repeated.min_items = 1];
+  // When TRUE (default), an UpsertParamValueOp targeting a product where the
+  // param is not yet applicable is skipped and reported as a failure for that
+  // product rather than silently auto-adding the applicability row first.
+  bool skip_missing_applicable = 3;
+}
+
+// BulkEditProductParamsResponse is the response for queuing a bulk param-edit
+// job. The job runs asynchronously; poll GetBulkProductParamJobStatus for progress.
+message BulkEditProductParamsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Queued job summary (job_id, job_code, status, progress counters).
+  BulkParamJobInfo data = 2;
+}
+
+// BulkParamJobInfo summarizes a freshly-queued bulk product-param edit job.
+message BulkParamJobInfo {
+  // job_execution.job_id (UUID).
+  string job_id = 1;
+  // Human-readable code (e.g. "CPP_BULK-202609-001").
+  string job_code = 2;
+  // Initial status, typically "QUEUED".
+  string status = 3;
+  // Total products expected to be processed by this job.
+  int32 total_children = 4;
+  // Products processed successfully so far.
+  int32 completed_children = 5;
+  // Products that failed so far.
+  int32 failed_children = 6;
+}
+
+// GetBulkProductParamJobStatusRequest identifies the bulk product-param edit
+// job whose live status/progress should be polled while it is still running.
+message GetBulkProductParamJobStatusRequest {
+  // job_execution.job_id (UUID).
+  string job_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetBulkProductParamJobStatusResponse reports the bulk job's current status
+// and live child-completion counters.
+message GetBulkProductParamJobStatusResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // job_execution.job_id (UUID).
+  string job_id = 2;
+  // Human-readable code (e.g. "CPP_BULK-202609-001").
+  string job_code = 3;
+  // Current status (e.g. "QUEUED", "PROCESSING", "DONE", "FAILED", "PARTIAL").
+  string status = 4;
+  // Total products expected to be processed by this job.
+  int32 total_children = 5;
+  // Products processed successfully so far.
+  int32 completed_children = 6;
+  // Products that failed so far.
+  int32 failed_children = 7;
+}
+
+// ListBulkProductParamJobFailuresRequest identifies the bulk product-param
+// edit job whose per-item failures should be listed.
+message ListBulkProductParamJobFailuresRequest {
+  // job_execution.job_id (UUID).
+  string job_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// ListBulkProductParamJobFailuresResponse lists every product that failed
+// within a bulk job, with its error message.
+message ListBulkProductParamJobFailuresResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Failed items, in the order the worker processed them.
+  repeated BulkProductParamJobFailure failures = 2;
+}
+
+// BulkProductParamJobFailure describes one product that failed within a bulk
+// param-edit job.
+message BulkProductParamJobFailure {
+  // cost_product_master.cpm_product_sys_id that failed.
+  int64 product_sys_id = 1;
+  // Product's business code, for display without a follow-up lookup.
+  string product_code = 2;
+  // Human-readable error message explaining the failure.
+  string error_message = 3;
+}
+
+// =============================================================================
+// SERVICE
+// =============================================================================
+
+// CostProductParamBulkService runs asynchronous bulk edits of applicable
+// parameters and param values across many products at once, mirroring
+// MBHeadService's bulk-lifecycle job pattern (submit → job info → poll status
+// → list failures) in yarn_master.proto.
+service CostProductParamBulkService {
+  // BulkEditProductParams applies a list of add-applicable/remove-applicable/
+  // upsert-value operations, in order, to up to 500 products in one request.
+  // Runs asynchronously via a job: the response returns immediately with job
+  // info while the per-product work happens in a background worker, each
+  // product in its own transaction — poll GetBulkProductParamJobStatus for
+  // progress.
+  rpc BulkEditProductParams(BulkEditProductParamsRequest) returns (BulkEditProductParamsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/cost-product-parameters/bulk-edit"
+      body: "*"
+    };
+  }
+
+  // GetBulkProductParamJobStatus polls the live status and progress counters
+  // of a bulk product-param edit job while it is still running.
+  rpc GetBulkProductParamJobStatus(GetBulkProductParamJobStatusRequest) returns (GetBulkProductParamJobStatusResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-product-parameters/bulk-jobs/{job_id}/status"};
+  }
+
+  // ListBulkProductParamJobFailures lists the per-product failures recorded
+  // by a finished (or in-progress) bulk product-param edit job, so the caller
+  // can see which products failed and why.
+  rpc ListBulkProductParamJobFailures(ListBulkProductParamJobFailuresRequest) returns (ListBulkProductParamJobFailuresResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-product-parameters/bulk-jobs/{job_id}/failures"};
+  }
+}
