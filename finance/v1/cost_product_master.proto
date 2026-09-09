@@ -262,6 +262,23 @@ message DownloadCostProductMasterTemplateResponse {
   string file_name = 3;
 }
 
+// =============================================================================
+// Duplicate — clones a product row (new auto-generated code) and, optionally,
+// its applicable params (CAPP) + param values (CPP). No route is touched.
+// =============================================================================
+
+message DuplicateProductRequest {
+  int64 product_sys_id = 1 [(buf.validate.field).int64.gte = 1];
+  string new_code_prefix = 2 [(buf.validate.field).string.max_len = 40];
+  bool copy_params = 3;
+}
+
+message DuplicateProductResponse {
+  common.v1.BaseResponse base = 1;
+  int64 new_product_sys_id = 2;
+  string new_product_code = 3;
+}
+
 service CostProductMasterService {
   rpc CreateCostProductMaster(CreateCostProductMasterRequest) returns (CreateCostProductMasterResponse) {
     option (google.api.http) = {
@@ -313,5 +330,12 @@ service CostProductMasterService {
 
   rpc DownloadCostProductMasterTemplate(DownloadCostProductMasterTemplateRequest) returns (DownloadCostProductMasterTemplateResponse) {
     option (google.api.http) = {get: "/api/v1/finance/cost-product-masters/template"};
+  }
+
+  rpc DuplicateProduct(DuplicateProductRequest) returns (DuplicateProductResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/cost-product-master/{product_sys_id}/duplicate"
+      body: "*"
+    };
   }
 }

@@ -237,6 +237,19 @@ service CostRouteService {
       body: "*"
     };
   }
+  rpc AttachRoute(AttachRouteRequest) returns (AttachRouteResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/routes/attach"
+      body: "*"
+    };
+  }
+}
+
+// DuplicateRouteTargetMode selects what DuplicateRoute duplicates onto.
+enum DuplicateRouteTargetMode {
+  DUPLICATE_ROUTE_TARGET_MODE_UNSPECIFIED = 0; // Default -- treated as NEW_PRODUCT for backward compatibility.
+  DUPLICATE_ROUTE_TARGET_MODE_NEW_PRODUCT = 1; // Existing behavior: duplicate onto brand-new product(s).
+  DUPLICATE_ROUTE_TARGET_MODE_SAME_PRODUCT = 2; // Fork the route graph only, keeping the same product.
 }
 
 message DuplicateRouteRequest {
@@ -247,6 +260,8 @@ message DuplicateRouteRequest {
   bool include_values = 5;
   string new_code_prefix = 6 [(buf.validate.field).string.max_len = 40];
   int64 linked_request_id = 7;
+  // Defaults to NEW_PRODUCT when unspecified, matching pre-existing behavior.
+  DuplicateRouteTargetMode target_mode = 8;
 }
 message DuplicateRouteResponse {
   common.v1.BaseResponse base = 1;
@@ -279,4 +294,14 @@ message CreateRouteFromProductRequest {
 message CreateRouteFromProductResponse {
   common.v1.BaseResponse base = 1;
   int64 head_id = 2;
+}
+
+message AttachRouteRequest {
+  int64 source_head_id = 1 [(buf.validate.field).int64.gt = 0];
+  int64 target_product_sys_id = 2 [(buf.validate.field).int64.gt = 0];
+  int64 linked_request_id = 3; // optional, atomically links the request on success.
+}
+message AttachRouteResponse {
+  common.v1.BaseResponse base = 1;
+  int64 new_head_id = 2;
 }
