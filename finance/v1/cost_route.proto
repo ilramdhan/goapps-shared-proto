@@ -48,6 +48,12 @@ message CostRouteSeq {
   double position_y = 13;
   // RMs that feed this stage (rendered inline on graph fetch).
   repeated CostRouteRm rms = 14;
+  // Head ID of the nested MB this stage was spliced in from (0 = native to the requested head).
+  int64 origin_head_id = 15;
+  // Product code of the nested MB this stage was spliced in from (empty = native).
+  string origin_product_code = 16;
+  // Flattening depth of this stage (0 = native to the requested head).
+  int32 nest_depth = 17;
 }
 
 // CostRouteRm is one input edge feeding a SEQ.
@@ -76,6 +82,16 @@ message CostRouteRm {
   double position_y = 17;
   // RM group display name (read-time join on rm_group_code).
   string rm_group_name = 18;
+  // Head ID of the nested MB this row was flattened in from (0 = native to the requested head).
+  int64 origin_head_id = 19;
+  // Ratio compounded down through nested-MB flattening (equals route_rm_ratio when native).
+  double effective_ratio = 20;
+  // Flattening depth of this row (0 = native to the requested head).
+  int32 nest_depth = 21;
+  // Product code of the nested MB this row was flattened in from (empty = native).
+  string origin_product_code = 22;
+  // Product name of the nested MB this row was flattened in from (empty = native).
+  string origin_product_name = 23;
 }
 
 // RouteGraph bundles the head + all seqs (with rms inline).
@@ -96,6 +112,8 @@ message GetRouteByProductResponse {
 
 message GetRouteGraphRequest {
   int64 head_id = 1 [(buf.validate.field).int64.gt = 0];
+  // When true, recursively flattens nested-MB composition into the returned graph (display-only, read-time).
+  bool include_nested_mb = 2;
 }
 message GetRouteGraphResponse {
   common.v1.BaseResponse base = 1;
