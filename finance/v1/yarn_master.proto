@@ -3428,8 +3428,12 @@ message CreateMbCompositionRequest {
   string mbh_id = 1 [(buf.validate.field).string.uuid = true];
   // Display sequence number within the head.
   int32 seq_no = 2 [(buf.validate.field).int32.gte = 0];
-  // Referenced RM group head UUID.
-  string group_head_id = 3 [(buf.validate.field).string.uuid = true];
+  // Referenced RM group head UUID. Required (and validated as a UUID) only when
+  // source_type is GROUP; empty for MB/CARRIER rows, so it is ignored when unset.
+  string group_head_id = 3 [(buf.validate.field) = {
+    ignore: IGNORE_IF_ZERO_VALUE
+    string: {uuid: true}
+  }];
   // Composition percentage.
   string composition_pct = 4 [(buf.validate.field).string.min_len = 1];
   // Source type: GROUP/MB/CARRIER.
@@ -3460,8 +3464,12 @@ message UpdateMbCompositionRequest {
   string mbcm_id = 1 [(buf.validate.field).string.uuid = true];
   // Updated composition percentage.
   string composition_pct = 2 [(buf.validate.field).string.min_len = 1];
-  // Updated referenced RM group head UUID.
-  string group_head_id = 3 [(buf.validate.field).string.uuid = true];
+  // Updated referenced RM group head UUID. Required (and validated as a UUID) only
+  // when source_type is GROUP; empty for MB/CARRIER rows, so it is ignored when unset.
+  string group_head_id = 3 [(buf.validate.field) = {
+    ignore: IGNORE_IF_ZERO_VALUE
+    string: {uuid: true}
+  }];
   // Updated source type: GROUP/MB/CARRIER.
   string source_type = 4 [(buf.validate.field).string = {
     in: [
