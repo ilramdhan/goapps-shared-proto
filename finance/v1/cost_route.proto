@@ -92,6 +92,12 @@ message CostRouteRm {
   string origin_product_code = 22;
   // Product name of the nested MB this row was flattened in from (empty = native).
   string origin_product_name = 23;
+  // Product code of the referenced product (read-time join on rm_product_sys_id).
+  // Populated only for PRODUCT-type rows; empty for ITEM/GROUP rows.
+  string rm_product_code = 24;
+  // Product name of the referenced product (read-time join on rm_product_sys_id).
+  // Populated only for PRODUCT-type rows; empty for ITEM/GROUP rows.
+  string rm_product_name = 25;
 }
 
 // RouteGraph bundles the head + all seqs (with rms inline).
