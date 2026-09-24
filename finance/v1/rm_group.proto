@@ -150,6 +150,10 @@ message RMGroupHead {
   // V2: Marketing flag (SP/PP/FP) — replaces flag_marketing semantics.
   // When UNSPECIFIED uses AUTO fallback SP→PP→FP.
   RMMarketingFlag marketing_flag = 21;
+  // Oil group flag (head-level, global — NOT period-versioned). When true the
+  // group is selectable as an OIL_NAME option (lookup master RM_GROUP_OIL) and
+  // its per-period rate drives OIL_RATE in the costing engine.
+  bool is_oil_group = 22;
 }
 
 // RMGroupDetail is one item's membership in an RM group.
@@ -291,6 +295,8 @@ message CreateRMGroupRequest {
   RMValuationFlag valuation_flag = 11;
   // V2: Marketing flag.
   RMMarketingFlag marketing_flag = 12;
+  // Mark the new group as an oil group (global, not per period). Defaults to false.
+  bool is_oil_group = 13;
 }
 
 // Create response.
@@ -384,6 +390,10 @@ message UpdateRMGroupRequest {
   bool clear_marketing_default_value = 25;
   // Period (YYYYMM) this update targets.
   string period = 26 [(buf.validate.field).string.pattern = "^[0-9]{6}$"];
+  // New oil group flag (head-level, global — applies to all periods). Absent
+  // leaves it unchanged. Un-flagging a group still referenced by product
+  // OIL_NAME values is rejected by the backend (ErrOilGroupInUse).
+  optional bool is_oil_group = 27;
 }
 
 // Update response.
@@ -445,6 +455,9 @@ message ListRMGroupsRequest {
       "desc"
     ]
   }];
+  // Optional oil group filter. Absent = no filter; true = only oil groups;
+  // false = only non-oil groups.
+  optional bool is_oil_group = 7;
 }
 
 // List response.

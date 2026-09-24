@@ -3120,6 +3120,11 @@ message ListMasterOptionsRequest {
     gte: 0
     lte: 500
   }];
+  // Optional product context (cost_product_master product_sys_id). Only honored
+  // by master_code "RM_GROUP_OIL": when set and the product's type has an oil
+  // class, options are restricted to the oil groups allowed for that product
+  // type. Ignored by every other master; absent/0 means no product filter.
+  optional int64 product_sys_id = 4 [(buf.validate.field).int64.gte = 0];
 }
 
 // ListMasterOptionsResponse is the response for ListMasterOptions.
