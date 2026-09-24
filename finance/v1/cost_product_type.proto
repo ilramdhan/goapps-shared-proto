@@ -19,6 +19,9 @@ message CostProductType {
   string type_code = 2; // max 5 chars uppercase
   string type_name = 3;
   bool is_active = 4;
+  // Oil class of the product type: "" (no oil), "PTY", "POY" or "SUPERBA".
+  // Drives IS_PTY/IS_POY/IS_SUPERBA flags and OIL_RATE resolution in costing.
+  string oil_class = 5;
   common.v1.AuditInfo audit = 16;
 }
 
@@ -151,6 +154,68 @@ message DownloadCostProductTypeTemplateResponse {
   string file_name = 3;
 }
 
+// ── Oil config ───────────────────────────────────────────────────────────────
+
+// CostProductTypeOilGroup is one oil RM group allowed for a product type.
+message CostProductTypeOilGroup {
+  // RM group code (cst_rm_group_head.group_code; must be an oil group).
+  string group_code = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 30
+  }];
+  // RM group display name (read-only; ignored on Set).
+  string group_name = 2;
+  // True for the default oil group of the type (exactly one when groups non-empty).
+  bool is_default = 3;
+}
+
+// GetCostProductTypeOilConfigRequest fetches the oil class + allowed oil groups of a type.
+message GetCostProductTypeOilConfigRequest {
+  // Product type id.
+  int32 type_id = 1 [(buf.validate.field).int32.gte = 1];
+}
+
+// GetCostProductTypeOilConfigResponse returns the oil config of a type.
+message GetCostProductTypeOilConfigResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Product type id.
+  int32 type_id = 2;
+  // Oil class: "", "PTY", "POY" or "SUPERBA".
+  string oil_class = 3;
+  // Allowed oil groups (one flagged default).
+  repeated CostProductTypeOilGroup groups = 4;
+}
+
+// SetCostProductTypeOilConfigRequest replaces the oil class + allowed oil groups of a type.
+message SetCostProductTypeOilConfigRequest {
+  // Product type id.
+  int32 type_id = 1 [(buf.validate.field).int32.gte = 1];
+  // Oil class: "" clears it (then groups must be empty), else PTY/POY/SUPERBA.
+  string oil_class = 2 [(buf.validate.field).string = {
+    in: [
+      "",
+      "PTY",
+      "POY",
+      "SUPERBA"
+    ]
+  }];
+  // Full replacement set of allowed oil groups (max 20; exactly one default when non-empty).
+  repeated CostProductTypeOilGroup groups = 3 [(buf.validate.field).repeated.max_items = 20];
+}
+
+// SetCostProductTypeOilConfigResponse returns the saved oil config.
+message SetCostProductTypeOilConfigResponse {
+  // Standard response envelope.
+  common.v1.BaseResponse base = 1;
+  // Product type id.
+  int32 type_id = 2;
+  // Oil class after save.
+  string oil_class = 3;
+  // Allowed oil groups after save.
+  repeated CostProductTypeOilGroup groups = 4;
+}
+
 // CostProductTypeService — CRUD master for canonical product types.
 service CostProductTypeService {
   rpc CreateCostProductType(CreateCostProductTypeRequest) returns (CreateCostProductTypeResponse) {
@@ -185,5 +250,18 @@ service CostProductTypeService {
 
   rpc DownloadCostProductTypeTemplate(DownloadCostProductTypeTemplateRequest) returns (DownloadCostProductTypeTemplateResponse) {
     option (google.api.http) = {get: "/api/v1/finance/cost-product-types/template"};
+  }
+
+  // GetCostProductTypeOilConfig returns the oil class + allowed oil groups (reuses view permission).
+  rpc GetCostProductTypeOilConfig(GetCostProductTypeOilConfigRequest) returns (GetCostProductTypeOilConfigResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-product-types/{type_id}/oil-config"};
+  }
+
+  // SetCostProductTypeOilConfig replaces the oil class + allowed oil groups (reuses update permission).
+  rpc SetCostProductTypeOilConfig(SetCostProductTypeOilConfigRequest) returns (SetCostProductTypeOilConfigResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/cost-product-types/{type_id}/oil-config"
+      body: "*"
+    };
   }
 }
