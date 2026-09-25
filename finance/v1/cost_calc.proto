@@ -277,6 +277,23 @@ message CostResult {
   int32 product_type_id = 22;
   // Resolved product type code (never the raw id in the UI).
   string product_type_code = 23;
+  // Resolved ERP item code (from cost_erp_item, matched via
+  // cost_product_master.cpm_erp_item_code; falls back to the denormalized
+  // cpm_erp_item_code when no cost_erp_item row matches).
+  string item_code = 24;
+  // Resolved ERP item name (from cost_erp_item.cei_item_name).
+  string item_name = 25;
+  // Shade code (from cost_product_master.cpm_shade_code).
+  string shade_code = 26;
+  // Shade name (from cost_product_master.cpm_shade_name).
+  string shade_name = 27;
+  // Reference code of the raw material with the highest contribution among
+  // cpc_rm_cost_detail entries.
+  string primary_rm_code = 28;
+  // Resolved display label of the primary raw material.
+  string primary_rm_name = 29;
+  // Count of raw material entries in cpc_rm_cost_detail.
+  int32 rm_count = 30;
 }
 
 // CostBreakdown is the full drill-down for one CostResult.
@@ -560,6 +577,12 @@ message ListCostResultsRequest {
       "desc"
     ]
   }];
+  // Shade code filter (empty = no filter). Matches
+  // cost_product_master.cpm_shade_code.
+  string shade_code = 9 [(buf.validate.field).string.max_len = 50];
+  // Raw material search (empty = no filter). Matches ref_code or ref_label of
+  // any entry in cpc_rm_cost_detail.
+  string raw_material = 10 [(buf.validate.field).string.max_len = 100];
 }
 
 // ListCostResultsResponse returns a page of cost results across products.
