@@ -701,6 +701,11 @@ message RequestProductCostSheetExportRequest {
   // request is rejected at the edge instead of silently truncated deep in the
   // handler. Keep the two numbers in sync.
   repeated int64 product_sys_ids = 6 [(buf.validate.field).repeated.max_items = 200];
+  // Shade code filter (empty = all shades).
+  repeated string shade_codes = 7 [(buf.validate.field).repeated.max_items = 200];
+  // Raw-material group code filter, matched against GROUP-type RM lines
+  // (empty = all raw materials).
+  repeated string rm_group_codes = 8 [(buf.validate.field).repeated.max_items = 200];
 }
 
 // RequestProductCostSheetExportResponse acknowledges the queued job.
