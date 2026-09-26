@@ -294,6 +294,10 @@ message CostResult {
   string primary_rm_name = 29;
   // Count of raw material entries in cpc_rm_cost_detail.
   int32 rm_count = 30;
+  // Full raw material breakdown (every cpc_rm_cost_detail line, ordered by
+  // contribution descending), so a UI can show more than just the primary
+  // contributor. Reuses CostRMDetail (already defined for CostBreakdown).
+  repeated CostRMDetail rm_details = 31;
 }
 
 // CostBreakdown is the full drill-down for one CostResult.
