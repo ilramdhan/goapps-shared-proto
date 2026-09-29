@@ -154,6 +154,11 @@ message RMGroupHead {
   // group is selectable as an OIL_NAME option (lookup master RM_GROUP_OIL) and
   // its per-period rate drives OIL_RATE in the costing engine.
   bool is_oil_group = 22;
+  // Carry-forward provenance of the per-period values overlaid on this head
+  // (only meaningful when the head is read for a specific period).
+  // Empty = an exact row exists for the requested period; "ANCHOR" = values
+  // fell back to the anchor row; otherwise the YYYYMM of the earlier source period.
+  string inherited_from_period = 23;
 }
 
 // RMGroupDetail is one item's membership in an RM group.
@@ -196,6 +201,11 @@ message RMGroupDetail {
   optional double valuation_transport_rate = 18;
   // V2: Valuation default value (per detail; drives FL).
   optional double valuation_default_value = 19;
+  // Carry-forward provenance of the per-period values overlaid on this detail
+  // (only meaningful when the detail is read for a specific period).
+  // Empty = an exact row exists for the requested period; "ANCHOR" = values
+  // fell back to the anchor row; otherwise the YYYYMM of the earlier source period.
+  string inherited_from_period = 20;
 }
 
 // RMGroupHeadWithDetails bundles a head and its details for the Get response.
