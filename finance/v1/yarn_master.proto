@@ -930,13 +930,16 @@ message ProductGrade {
   string notes = 9;
   // Pattern match key (e.g., "DBR <=600D").
   string pg_detail_product = 10;
-  // Grade label for STD_VALUE_LOSS.
+  // Display grade label (informational; no longer copied to a cost param —
+  // products reference the grade by pg_code via NS_LOSS_TYPE / BC_LOSS_TYPE).
   string pg_grade_label = 11;
-  // BC_SPECIAL_PROD rate.
+  // Standard selling price; auto-fills param STD_SP_AX.
   double std_selling_price = 12;
-  // VALUE_LOSS rate.
+  // BC selling price; auto-fills param STD_SP_BC via BC_LOSS_TYPE
+  // (BC V-Loss = (cost before QLoss − STD_SP_BC) × (B+C) / 100).
   double sp_value = 13;
-  // Optional loss factor (param NON_STD_SPECIAL_PROD, from Oracle CMPG_LOSS).
+  // Optional NS loss factor (from Oracle CMPG_LOSS); auto-fills param NS_LOSS via
+  // NS_LOSS_TYPE (NS V-Loss = (AE + A9 + A) / 100 × NS_LOSS).
   optional double loss_pct = 14;
   // Optional display sequence number (from Oracle CMPG_SEQ_NO).
   optional int32 seq_no = 15;
@@ -977,13 +980,13 @@ message CreateProductGradeRequest {
   string notes = 7 [(buf.validate.field).string.max_len = 1000];
   // Pattern match key (max 100 chars).
   string pg_detail_product = 8 [(buf.validate.field).string.max_len = 100];
-  // Grade label for STD_VALUE_LOSS (max 50 chars).
+  // Display grade label (max 50 chars; informational, not copied to a param).
   string pg_grade_label = 9 [(buf.validate.field).string.max_len = 50];
-  // BC_SPECIAL_PROD rate (≥ 0).
+  // Standard selling price, auto-fills STD_SP_AX (≥ 0).
   double std_selling_price = 10 [(buf.validate.field).double.gte = 0];
-  // VALUE_LOSS rate (≥ 0).
+  // BC selling price, auto-fills STD_SP_BC via BC_LOSS_TYPE (≥ 0).
   double sp_value = 11 [(buf.validate.field).double.gte = 0];
-  // Optional loss factor (≥ 0).
+  // Optional NS loss factor, auto-fills NS_LOSS via NS_LOSS_TYPE (≥ 0).
   optional double loss_pct = 12 [(buf.validate.field).double.gte = 0];
   // Optional display sequence number (≥ 0).
   optional int32 seq_no = 13 [(buf.validate.field).int32.gte = 0];
@@ -1043,13 +1046,13 @@ message UpdateProductGradeRequest {
   optional bool is_active = 8;
   // Optional pattern match key (max 100 chars).
   optional string pg_detail_product = 9 [(buf.validate.field).string.max_len = 100];
-  // Optional grade label for STD_VALUE_LOSS (max 50 chars).
+  // Optional display grade label (max 50 chars; informational, not copied to a param).
   optional string pg_grade_label = 10 [(buf.validate.field).string.max_len = 50];
-  // Optional BC_SPECIAL_PROD rate (≥ 0).
+  // Optional standard selling price, auto-fills STD_SP_AX (≥ 0).
   optional double std_selling_price = 11 [(buf.validate.field).double.gte = 0];
-  // Optional VALUE_LOSS rate (≥ 0).
+  // Optional BC selling price, auto-fills STD_SP_BC via BC_LOSS_TYPE (≥ 0).
   optional double sp_value = 12 [(buf.validate.field).double.gte = 0];
-  // Optional updated loss factor (≥ 0).
+  // Optional updated NS loss factor, auto-fills NS_LOSS via NS_LOSS_TYPE (≥ 0).
   optional double loss_pct = 13 [(buf.validate.field).double.gte = 0];
   // Optional updated display sequence number (≥ 0).
   optional int32 seq_no = 14 [(buf.validate.field).int32.gte = 0];
