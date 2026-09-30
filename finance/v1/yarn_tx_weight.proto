@@ -226,6 +226,12 @@ message ListYarnTxWeightsResponse {
 
 // YarnTxWeightService provides CRUD operations for the global TX Weight master
 // (per product type, per grade weight rules).
+// DEPRECATED — superseded by YarnTxWeightGroupService (one config shared by many
+// product types). Kept compiling for backward compatibility: per-row List/Get/Update
+// keep working on rule rows and Delete of a single rule row is allowed, but Create may
+// return FailedPrecondition ("use YarnTxWeightGroupService"). The frontend no longer
+// uses this service. (Intentionally not using the Go "Deprecated:" doc marker: it would
+// propagate into generated code and trip staticcheck SA1019 in existing handlers.)
 service YarnTxWeightService {
   // CreateYarnTxWeight creates a new TX Weight rule.
   rpc CreateYarnTxWeight(CreateYarnTxWeightRequest) returns (CreateYarnTxWeightResponse) {
@@ -257,5 +263,289 @@ service YarnTxWeightService {
   // ListYarnTxWeights lists TX Weight rules with search, filter, and pagination.
   rpc ListYarnTxWeights(ListYarnTxWeightsRequest) returns (ListYarnTxWeightsResponse) {
     option (google.api.http) = {get: "/api/v1/finance/yarn-tx-weights"};
+  }
+}
+
+// =============================================================================
+// YarnTxWeightGroup — one TX Weight config (set of AE/A9/A/B/C grade rules)
+// shared by many product types. DB tables: mst_yarn_tx_weight_group (ytwg_
+// prefix), junction mst_yarn_tx_weight_group_type, and rule rows in
+// mst_yarn_tx_weight (ytw_group_id). A product type belongs to at most one group.
+// =============================================================================
+
+// =============================================================================
+// MESSAGES - Group Entity
+// =============================================================================
+
+// YarnTxWeightProductTypeRef is a product type mapped to a TX Weight group.
+message YarnTxWeightProductTypeRef {
+  // Product type id (cost_product_type.cpt_type_id).
+  int32 id = 1;
+  // Product type code (e.g. "TTY").
+  string code = 2;
+  // Product type name.
+  string name = 3;
+}
+
+// YarnTxWeightRule is one grade rule inside a TX Weight group.
+message YarnTxWeightRule {
+  // Grade the rule applies to (cannot be UNSPECIFIED).
+  YarnTxWeightGrade grade = 1 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // How value is applied to AX_WT (cannot be UNSPECIFIED).
+  YarnTxWeightMode mode = 2 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // Rule value (subtrahend, multiplier, or fixed weight depending on mode).
+  double value = 3 [(buf.validate.field).double.finite = true];
+  // Optional description (max 200 chars).
+  string description = 4 [(buf.validate.field).string.max_len = 200];
+}
+
+// YarnTxWeightGroup is one TX Weight config shared by one or more product types.
+message YarnTxWeightGroup {
+  // Unique identifier (UUID).
+  string group_id = 1;
+  // Group code (unique among live groups, e.g. "TTY").
+  string code = 2;
+  // Group name.
+  string name = 3;
+  // Optional description.
+  string description = 4;
+  // Product types mapped to this group.
+  repeated YarnTxWeightProductTypeRef product_types = 5;
+  // Grade rules of this group (at most one per grade).
+  repeated YarnTxWeightRule rules = 6;
+  // Audit information.
+  common.v1.AuditInfo audit = 16;
+}
+
+// =============================================================================
+// MESSAGES - Group Create
+// =============================================================================
+
+// CreateYarnTxWeightGroupRequest is the request for creating a TX Weight group.
+message CreateYarnTxWeightGroupRequest {
+  // Group code (required, 1-30 chars, uppercase letters/digits/underscore).
+  string code = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 30
+    pattern: "^[A-Z][A-Z0-9_]*$"
+  }];
+  // Group name (required, 1-100 chars).
+  string name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Optional description (max 200 chars).
+  string description = 3 [(buf.validate.field).string.max_len = 200];
+  // Product type ids mapped to this group (min 1, unique, each >= 1).
+  // Each type may belong to at most one group.
+  repeated int32 product_type_ids = 4 [(buf.validate.field).repeated = {
+    min_items: 1
+    unique: true
+    items: {
+      int32: {gte: 1}
+    }
+  }];
+  // Grade rules (1-5, unique grade).
+  repeated YarnTxWeightRule rules = 5 [
+    (buf.validate.field).repeated = {
+      min_items: 1
+      max_items: 5
+    },
+    (buf.validate.field).cel = {
+      id: "rules.unique_grade"
+      message: "each grade may appear at most once"
+      expression: "this.map(r, r.grade).unique()"
+    }
+  ];
+}
+
+// CreateYarnTxWeightGroupResponse is the response for creating a TX Weight group.
+message CreateYarnTxWeightGroupResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Created TX Weight group.
+  YarnTxWeightGroup data = 2;
+}
+
+// =============================================================================
+// MESSAGES - Group Get
+// =============================================================================
+
+// GetYarnTxWeightGroupRequest is the request for getting a TX Weight group by ID.
+message GetYarnTxWeightGroupRequest {
+  // Group ID (UUID format).
+  string group_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetYarnTxWeightGroupResponse is the response for getting a TX Weight group.
+message GetYarnTxWeightGroupResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // TX Weight group data.
+  YarnTxWeightGroup data = 2;
+}
+
+// =============================================================================
+// MESSAGES - Group Update
+// =============================================================================
+
+// UpdateYarnTxWeightGroupRequest is the request for updating a TX Weight group.
+// The product type set and the rules are replaced in one transaction.
+message UpdateYarnTxWeightGroupRequest {
+  // Group ID to update (UUID format).
+  string group_id = 1 [(buf.validate.field).string.uuid = true];
+  // Group code (required, 1-30 chars, uppercase letters/digits/underscore).
+  string code = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 30
+    pattern: "^[A-Z][A-Z0-9_]*$"
+  }];
+  // Group name (required, 1-100 chars).
+  string name = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Optional description (max 200 chars).
+  string description = 4 [(buf.validate.field).string.max_len = 200];
+  // Full replacement set of product type ids (min 1, unique, each >= 1).
+  repeated int32 product_type_ids = 5 [(buf.validate.field).repeated = {
+    min_items: 1
+    unique: true
+    items: {
+      int32: {gte: 1}
+    }
+  }];
+  // Full replacement set of grade rules (1-5, unique grade).
+  repeated YarnTxWeightRule rules = 6 [
+    (buf.validate.field).repeated = {
+      min_items: 1
+      max_items: 5
+    },
+    (buf.validate.field).cel = {
+      id: "rules.unique_grade"
+      message: "each grade may appear at most once"
+      expression: "this.map(r, r.grade).unique()"
+    }
+  ];
+}
+
+// UpdateYarnTxWeightGroupResponse is the response for updating a TX Weight group.
+message UpdateYarnTxWeightGroupResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated TX Weight group.
+  YarnTxWeightGroup data = 2;
+}
+
+// =============================================================================
+// MESSAGES - Group Delete
+// =============================================================================
+
+// DeleteYarnTxWeightGroupRequest is the request for deleting (soft delete) a TX Weight group.
+// The product type mappings are removed so the types become free again.
+message DeleteYarnTxWeightGroupRequest {
+  // Group ID to delete (UUID format).
+  string group_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteYarnTxWeightGroupResponse is the response for deleting a TX Weight group.
+message DeleteYarnTxWeightGroupResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+}
+
+// =============================================================================
+// MESSAGES - Group List with Search & Filter
+// =============================================================================
+
+// ListYarnTxWeightGroupsRequest is the request for listing TX Weight groups
+// with search, filter, and pagination.
+message ListYarnTxWeightGroupsRequest {
+  // Page number (1-indexed, default 1, min 1).
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  // Items per page (1-100, default 10).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Search query (searches in group code/name/description and mapped product type code/name).
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  // Filter by mapped product type id (0 = all).
+  int32 product_type_id = 4 [(buf.validate.field).int32.gte = 0];
+  // Sort field: "code", "name", "created_at", "updated_at" (default: "code").
+  string sort_by = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "code",
+      "name",
+      "created_at",
+      "updated_at"
+    ]
+  }];
+  // Sort order: "asc", "desc" (default: "asc").
+  string sort_order = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+// ListYarnTxWeightGroupsResponse is the response for listing TX Weight groups.
+message ListYarnTxWeightGroupsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // List of TX Weight groups.
+  repeated YarnTxWeightGroup data = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// =============================================================================
+// SERVICE DEFINITION - Group
+// =============================================================================
+
+// YarnTxWeightGroupService provides CRUD operations for TX Weight groups: one
+// config (grade rules) shared by many product types. Mapping a product type
+// already owned by another group fails with FailedPrecondition/AlreadyExists
+// naming the type code and the other group's code.
+service YarnTxWeightGroupService {
+  // CreateYarnTxWeightGroup creates a new TX Weight group with its types and rules.
+  rpc CreateYarnTxWeightGroup(CreateYarnTxWeightGroupRequest) returns (CreateYarnTxWeightGroupResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/yarn-tx-weight-groups"
+      body: "*"
+    };
+  }
+
+  // GetYarnTxWeightGroup retrieves a TX Weight group by ID.
+  rpc GetYarnTxWeightGroup(GetYarnTxWeightGroupRequest) returns (GetYarnTxWeightGroupResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/yarn-tx-weight-groups/{group_id}"};
+  }
+
+  // UpdateYarnTxWeightGroup updates a TX Weight group, replacing its type set
+  // and rules in one transaction.
+  rpc UpdateYarnTxWeightGroup(UpdateYarnTxWeightGroupRequest) returns (UpdateYarnTxWeightGroupResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/yarn-tx-weight-groups/{group_id}"
+      body: "*"
+    };
+  }
+
+  // DeleteYarnTxWeightGroup soft deletes a TX Weight group and frees its product types.
+  rpc DeleteYarnTxWeightGroup(DeleteYarnTxWeightGroupRequest) returns (DeleteYarnTxWeightGroupResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/yarn-tx-weight-groups/{group_id}"};
+  }
+
+  // ListYarnTxWeightGroups lists TX Weight groups with search, filter, and pagination.
+  rpc ListYarnTxWeightGroups(ListYarnTxWeightGroupsRequest) returns (ListYarnTxWeightGroupsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/yarn-tx-weight-groups"};
   }
 }
