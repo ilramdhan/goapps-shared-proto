@@ -1,0 +1,261 @@
+syntax = "proto3";
+
+package finance.v1;
+
+// Note: go_package is managed by buf.gen.yaml managed mode
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "google/api/annotations.proto";
+
+// =============================================================================
+// YarnTxWeight — global (NOT period-versioned) TX Weight master, migrated from
+// legacy Oracle CST_YARN_TX_WEIGHT. Drives the AE/A9/A/B/C grade weight
+// formulas (F_YARN_{AE,A9,A,B,C}_WT) per product type via the engine built-in
+// tx_weight(grade, AX_WT, fallback). DB table: mst_yarn_tx_weight (ytw_ prefix).
+// =============================================================================
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+// YarnTxWeightGrade is the yarn grade a TX Weight row applies to.
+enum YarnTxWeightGrade {
+  // Default -- used as "no filter" in list requests.
+  YARN_TX_WEIGHT_GRADE_UNSPECIFIED = 0;
+  // Grade AE.
+  YARN_TX_WEIGHT_GRADE_AE = 1;
+  // Grade A9.
+  YARN_TX_WEIGHT_GRADE_A9 = 2;
+  // Grade A.
+  YARN_TX_WEIGHT_GRADE_A = 3;
+  // Grade B.
+  YARN_TX_WEIGHT_GRADE_B = 4;
+  // Grade C.
+  YARN_TX_WEIGHT_GRADE_C = 5;
+}
+
+// YarnTxWeightMode is how the value is applied to the AX weight.
+enum YarnTxWeightMode {
+  // Default -- used as "no filter" in list requests.
+  YARN_TX_WEIGHT_MODE_UNSPECIFIED = 0;
+  // Result = AX_WT - value.
+  YARN_TX_WEIGHT_MODE_LESS_BY = 1;
+  // Result = AX_WT * value.
+  YARN_TX_WEIGHT_MODE_MULTIPLY = 2;
+  // Result = value (independent of AX_WT).
+  YARN_TX_WEIGHT_MODE_FIXED = 3;
+}
+
+// =============================================================================
+// MESSAGES - Entity
+// =============================================================================
+
+// YarnTxWeight is one (product type, grade) weight rule.
+// At most one live row exists per (product_type_id, grade).
+message YarnTxWeight {
+  // Unique identifier (UUID).
+  string id = 1;
+  // Product type id (cost_product_type.cpt_type_id).
+  int32 product_type_id = 2;
+  // Product type code (display only, e.g. "POY").
+  string product_type_code = 3;
+  // Product type name (display only).
+  string product_type_name = 4;
+  // Grade the rule applies to.
+  YarnTxWeightGrade grade = 5;
+  // How value is applied to AX_WT.
+  YarnTxWeightMode mode = 6;
+  // Rule value (subtrahend, multiplier, or fixed weight depending on mode).
+  double value = 7;
+  // Optional description.
+  string description = 8;
+  // Legacy Oracle CST_YARN_TX_WEIGHT.CYTW_SYS_ID (empty for rows created in GoApps).
+  string oracle_sys_id = 9;
+  // Audit information.
+  common.v1.AuditInfo audit = 16;
+}
+
+// =============================================================================
+// MESSAGES - Create
+// =============================================================================
+
+// CreateYarnTxWeightRequest is the request for creating a TX Weight rule.
+message CreateYarnTxWeightRequest {
+  // Product type id (required, >= 1).
+  int32 product_type_id = 1 [(buf.validate.field).int32.gte = 1];
+  // Grade (required, cannot be UNSPECIFIED).
+  YarnTxWeightGrade grade = 2 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // Mode (required, cannot be UNSPECIFIED).
+  YarnTxWeightMode mode = 3 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // Rule value.
+  double value = 4 [(buf.validate.field).double.finite = true];
+  // Optional description (max 200 chars).
+  string description = 5 [(buf.validate.field).string.max_len = 200];
+}
+
+// CreateYarnTxWeightResponse is the response for creating a TX Weight rule.
+message CreateYarnTxWeightResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Created TX Weight rule.
+  YarnTxWeight data = 2;
+}
+
+// =============================================================================
+// MESSAGES - Get
+// =============================================================================
+
+// GetYarnTxWeightRequest is the request for getting a TX Weight rule by ID.
+message GetYarnTxWeightRequest {
+  // TX Weight rule ID (UUID format).
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetYarnTxWeightResponse is the response for getting a TX Weight rule.
+message GetYarnTxWeightResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // TX Weight rule data.
+  YarnTxWeight data = 2;
+}
+
+// =============================================================================
+// MESSAGES - Update
+// =============================================================================
+
+// UpdateYarnTxWeightRequest is the request for updating a TX Weight rule.
+// Note: product_type_id and grade are immutable (they form the natural key).
+message UpdateYarnTxWeightRequest {
+  // TX Weight rule ID to update (UUID format).
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  // New mode (optional, cannot be UNSPECIFIED if provided).
+  optional YarnTxWeightMode mode = 2 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // New value (optional).
+  optional double value = 3 [(buf.validate.field).double.finite = true];
+  // New description (optional, max 200 chars).
+  optional string description = 4 [(buf.validate.field).string.max_len = 200];
+}
+
+// UpdateYarnTxWeightResponse is the response for updating a TX Weight rule.
+message UpdateYarnTxWeightResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // Updated TX Weight rule.
+  YarnTxWeight data = 2;
+}
+
+// =============================================================================
+// MESSAGES - Delete
+// =============================================================================
+
+// DeleteYarnTxWeightRequest is the request for deleting (soft delete) a TX Weight rule.
+message DeleteYarnTxWeightRequest {
+  // TX Weight rule ID to delete (UUID format).
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteYarnTxWeightResponse is the response for deleting a TX Weight rule.
+message DeleteYarnTxWeightResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+}
+
+// =============================================================================
+// MESSAGES - List with Search & Filter
+// =============================================================================
+
+// ListYarnTxWeightsRequest is the request for listing TX Weight rules
+// with search, filter, and pagination.
+message ListYarnTxWeightsRequest {
+  // Page number (1-indexed, default 1, min 1).
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  // Items per page (1-100, default 10).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Search query (searches in product type code/name and description).
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  // Filter by product type id (0 = all product types).
+  int32 product_type_id = 4 [(buf.validate.field).int32.gte = 0];
+  // Filter by grade (UNSPECIFIED = all grades).
+  YarnTxWeightGrade grade = 5 [(buf.validate.field).enum.defined_only = true];
+  // Sort field: "product_type", "grade", "created_at", "updated_at" (default: "product_type").
+  string sort_by = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "product_type",
+      "grade",
+      "created_at",
+      "updated_at"
+    ]
+  }];
+  // Sort order: "asc", "desc" (default: "asc").
+  string sort_order = 7 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+// ListYarnTxWeightsResponse is the response for listing TX Weight rules.
+message ListYarnTxWeightsResponse {
+  // Standard response metadata.
+  common.v1.BaseResponse base = 1;
+  // List of TX Weight rules.
+  repeated YarnTxWeight data = 2;
+  // Pagination metadata.
+  common.v1.PaginationResponse pagination = 3;
+}
+
+// =============================================================================
+// SERVICE DEFINITION
+// =============================================================================
+
+// YarnTxWeightService provides CRUD operations for the global TX Weight master
+// (per product type, per grade weight rules).
+service YarnTxWeightService {
+  // CreateYarnTxWeight creates a new TX Weight rule.
+  rpc CreateYarnTxWeight(CreateYarnTxWeightRequest) returns (CreateYarnTxWeightResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/yarn-tx-weights"
+      body: "*"
+    };
+  }
+
+  // GetYarnTxWeight retrieves a TX Weight rule by ID.
+  rpc GetYarnTxWeight(GetYarnTxWeightRequest) returns (GetYarnTxWeightResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/yarn-tx-weights/{id}"};
+  }
+
+  // UpdateYarnTxWeight updates an existing TX Weight rule.
+  // Note: product_type_id and grade are immutable.
+  rpc UpdateYarnTxWeight(UpdateYarnTxWeightRequest) returns (UpdateYarnTxWeightResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/yarn-tx-weights/{id}"
+      body: "*"
+    };
+  }
+
+  // DeleteYarnTxWeight soft deletes a TX Weight rule.
+  rpc DeleteYarnTxWeight(DeleteYarnTxWeightRequest) returns (DeleteYarnTxWeightResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/yarn-tx-weights/{id}"};
+  }
+
+  // ListYarnTxWeights lists TX Weight rules with search, filter, and pagination.
+  rpc ListYarnTxWeights(ListYarnTxWeightsRequest) returns (ListYarnTxWeightsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/yarn-tx-weights"};
+  }
+}
