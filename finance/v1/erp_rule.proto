@@ -1,0 +1,317 @@
+syntax = "proto3";
+
+package finance.v1;
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "google/api/annotations.proto";
+
+// ErpRuleService manages the ERP cost-integration rule tables (val-loss,
+// sell prices, grade groups) and compares rule snapshots between batches.
+service ErpRuleService {
+  // ListValLossRules lists val-loss rules.
+  // Permission: finance.cost.erprule.view
+  rpc ListValLossRules(ListValLossRulesRequest) returns (ListValLossRulesResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/master/erp-rules/valloss"};
+  }
+
+  // CreateValLossRule creates a val-loss rule.
+  // Permission: finance.cost.erprule.create
+  rpc CreateValLossRule(CreateValLossRuleRequest) returns (CreateValLossRuleResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/master/erp-rules/valloss"
+      body: "*"
+    };
+  }
+
+  // UpdateValLossRule updates a val-loss rule.
+  // Permission: finance.cost.erprule.update
+  rpc UpdateValLossRule(UpdateValLossRuleRequest) returns (UpdateValLossRuleResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/master/erp-rules/valloss/{id}"
+      body: "*"
+    };
+  }
+
+  // DeleteValLossRule soft-deletes a val-loss rule (is_active=false).
+  // Permission: finance.cost.erprule.delete
+  rpc DeleteValLossRule(DeleteValLossRuleRequest) returns (DeleteValLossRuleResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/master/erp-rules/valloss/{id}"};
+  }
+
+  // ListSellPrices lists sell prices per basis.
+  // Permission: finance.cost.erprule.view
+  rpc ListSellPrices(ListSellPricesRequest) returns (ListSellPricesResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/master/erp-rules/sell-prices"};
+  }
+
+  // UpsertSellPrice creates or updates the sell price of a basis (SP* only).
+  // Permission: finance.cost.erprule.update
+  rpc UpsertSellPrice(UpsertSellPriceRequest) returns (UpsertSellPriceResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/master/erp-rules/sell-prices/{basis}"
+      body: "*"
+    };
+  }
+
+  // ListGradeGroups lists grades with their group assignment.
+  // Permission: finance.cost.erprule.view
+  rpc ListGradeGroups(ListGradeGroupsRequest) returns (ListGradeGroupsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/master/erp-rules/grade-groups"};
+  }
+
+  // UpdateGradeGroup assigns a grade to a grade group.
+  // Permission: finance.cost.erprule.update
+  rpc UpdateGradeGroup(UpdateGradeGroupRequest) returns (UpdateGradeGroupResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/master/erp-rules/grade-groups/{grade_code}"
+      body: "*"
+    };
+  }
+
+  // GetRuleSnapshotDiff compares the rule snapshots of two batches.
+  // Permission: finance.cost.erprule.view
+  rpc GetRuleSnapshotDiff(GetRuleSnapshotDiffRequest) returns (GetRuleSnapshotDiffResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/master/erp-rules/snapshot-diff"};
+  }
+
+  // ExportErpRules exports the rule tables to Excel.
+  // Permission: finance.cost.erprule.export
+  rpc ExportErpRules(ExportErpRulesRequest) returns (ExportErpRulesResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/master/erp-rules/export"};
+  }
+}
+
+// =============================================================================
+// Entities
+// =============================================================================
+
+message ValLossRule {
+  int64 id = 1;
+  string fg_type = 2;
+  string prod_type = 3;
+  string grade_group = 4;
+  string basis = 5;
+  string val_loss = 6; // decimal string
+  bool is_active = 7;
+  string created_at = 8;
+  string created_by = 9;
+  string updated_at = 10;
+  string updated_by = 11;
+}
+
+message SellPrice {
+  string basis = 1;
+  string price = 2; // decimal string
+  bool is_active = 3;
+  string created_at = 4;
+  string created_by = 5;
+  string updated_at = 6;
+  string updated_by = 7;
+}
+
+message GradeGroup {
+  string grade_code = 1;
+  string grade_name = 2;
+  bool is_active = 3;
+  string grade_group = 4; // empty = unassigned
+  string assigned_by = 5;
+}
+
+message ChangeValue {
+  string name = 1;
+  string value = 2;
+}
+
+message RuleChange {
+  string subject = 1;
+  string kind = 2;
+  string key = 3;
+  repeated ChangeValue before = 4;
+  repeated ChangeValue after = 5;
+}
+
+// =============================================================================
+// Val-loss rules
+// =============================================================================
+
+message ListValLossRulesRequest {
+  string fg_type = 1 [(buf.validate.field).string.max_len = 15];
+  string prod_type = 2 [(buf.validate.field).string = {
+    in: [
+      "",
+      "POY",
+      "PTY",
+      "ITY"
+    ]
+  }];
+  string grade_group = 3 [(buf.validate.field).string = {
+    in: [
+      "",
+      "NS",
+      "AE",
+      "BC",
+      "BB",
+      "JLT",
+      "POYA",
+      "AX"
+    ]
+  }];
+  optional bool is_active = 4;
+  common.v1.PaginationRequest pagination = 5;
+}
+
+message ListValLossRulesResponse {
+  common.v1.BaseResponse base = 1;
+  repeated ValLossRule data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+message CreateValLossRuleRequest {
+  string fg_type = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 15
+  }];
+  string prod_type = 2 [(buf.validate.field).string = {
+    in: [
+      "POY",
+      "PTY",
+      "ITY"
+    ]
+  }];
+  string grade_group = 3 [(buf.validate.field).string = {
+    in: [
+      "NS",
+      "AE",
+      "BC",
+      "BB",
+      "JLT",
+      "POYA",
+      "AX"
+    ]
+  }];
+  string basis = 4 [(buf.validate.field).string = {
+    in: [
+      "COST",
+      "SPPTY",
+      "SPITY",
+      "SPBSD"
+    ]
+  }];
+  string val_loss = 5 [(buf.validate.field).string.pattern = "^[0-9]{1,3}(\\.[0-9]{1,6})?$"];
+}
+
+message CreateValLossRuleResponse {
+  common.v1.BaseResponse base = 1;
+  ValLossRule data = 2;
+}
+
+message UpdateValLossRuleRequest {
+  int64 id = 1 [(buf.validate.field).int64.gt = 0];
+  string val_loss = 2 [(buf.validate.field).string.pattern = "^[0-9]{1,3}(\\.[0-9]{1,6})?$"];
+  optional bool is_active = 3;
+}
+
+message UpdateValLossRuleResponse {
+  common.v1.BaseResponse base = 1;
+  ValLossRule data = 2;
+}
+
+message DeleteValLossRuleRequest {
+  int64 id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeleteValLossRuleResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+// =============================================================================
+// Sell prices
+// =============================================================================
+
+message ListSellPricesRequest {
+  common.v1.PaginationRequest pagination = 1;
+}
+
+message ListSellPricesResponse {
+  common.v1.BaseResponse base = 1;
+  repeated SellPrice data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+message UpsertSellPriceRequest {
+  string basis = 1 [(buf.validate.field).string = {
+    in: [
+      "SPPTY",
+      "SPITY",
+      "SPBSD"
+    ]
+  }];
+  string price = 2 [(buf.validate.field).string.pattern = "^[0-9]{1,12}(\\.[0-9]{1,6})?$"];
+  optional bool is_active = 3;
+}
+
+message UpsertSellPriceResponse {
+  common.v1.BaseResponse base = 1;
+  SellPrice data = 2;
+}
+
+// =============================================================================
+// Grade groups
+// =============================================================================
+
+message ListGradeGroupsRequest {
+  bool unassigned_only = 1;
+  common.v1.PaginationRequest pagination = 2;
+}
+
+message ListGradeGroupsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated GradeGroup data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+message UpdateGradeGroupRequest {
+  string grade_code = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 20
+  }];
+  string grade_group = 2 [(buf.validate.field).string = {
+    in: [
+      "NS",
+      "AE",
+      "BC",
+      "BB",
+      "JLT",
+      "POYA",
+      "AX"
+    ]
+  }];
+}
+
+message UpdateGradeGroupResponse {
+  common.v1.BaseResponse base = 1;
+  GradeGroup data = 2;
+}
+
+// =============================================================================
+// Snapshot diff + export
+// =============================================================================
+
+message GetRuleSnapshotDiffRequest {
+  int64 from_batch_id = 1 [(buf.validate.field).int64.gt = 0];
+  int64 to_batch_id = 2 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetRuleSnapshotDiffResponse {
+  common.v1.BaseResponse base = 1;
+  repeated RuleChange data = 2;
+}
+
+message ExportErpRulesRequest {}
+
+message ExportErpRulesResponse {
+  common.v1.BaseResponse base = 1;
+  bytes file_content = 2;
+  string file_name = 3;
+}
