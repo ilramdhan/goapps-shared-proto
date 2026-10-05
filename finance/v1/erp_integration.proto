@@ -1,0 +1,939 @@
+syntax = "proto3";
+
+package finance.v1;
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "google/api/annotations.proto";
+
+// ErpIntegrationService orchestrates the ERP standard-cost integration pipeline.
+service ErpIntegrationService {
+  // CreateErpBatch creates a batch for a period (refused if one is in flight).
+  // Permission: finance.cost.erpintegration.trigger
+  rpc CreateErpBatch(CreateErpBatchRequest) returns (CreateErpBatchResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/erp-integration/batches"
+      body: "*"
+    };
+  }
+
+  // ListErpBatches lists batches filtered by period/status.
+  // Permission: finance.cost.erpintegration.view
+  rpc ListErpBatches(ListErpBatchesRequest) returns (ListErpBatchesResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/erp-integration/batches"};
+  }
+
+  // GetErpBatch returns a batch with summary, progress and allowed actions.
+  // Permission: finance.cost.erpintegration.view
+  rpc GetErpBatch(GetErpBatchRequest) returns (GetErpBatchResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/erp-integration/batches/{batch_id}"};
+  }
+
+  // AbandonErpBatch moves a batch to FAILED (PG only).
+  // Permission: finance.cost.erpintegration.trigger
+  rpc AbandonErpBatch(AbandonErpBatchRequest) returns (AbandonErpBatchResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/erp-integration/batches/{batch_id}/abandon"
+      body: "*"
+    };
+  }
+
+  // LoadErpDemand loads ERP demand rows (read-only Oracle).
+  // Permission: finance.cost.erpintegration.trigger
+  rpc LoadErpDemand(LoadErpDemandRequest) returns (LoadErpDemandResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/erp-integration/batches/{batch_id}/load-demand"
+      body: "*"
+    };
+  }
+
+  // RunErpCoverage computes mapping/cost coverage.
+  // Permission: finance.cost.erpintegration.trigger
+  rpc RunErpCoverage(RunErpCoverageRequest) returns (RunErpCoverageResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/erp-integration/batches/{batch_id}/coverage"
+      body: "*"
+    };
+  }
+
+  // RunErpDerive derives standard costs (G10).
+  // Permission: finance.cost.erpintegration.trigger
+  rpc RunErpDerive(RunErpDeriveRequest) returns (RunErpDeriveResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/erp-integration/batches/{batch_id}/derive"
+      body: "*"
+    };
+  }
+
+  // ValidateErpBatch runs pre-push validations.
+  // Permission: finance.cost.erpintegration.validate
+  rpc ValidateErpBatch(ValidateErpBatchRequest) returns (ValidateErpBatchResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/erp-integration/batches/{batch_id}/validate"
+      body: "*"
+    };
+  }
+
+  // ReconErpBatch reconciles against the Oracle adjustment set (read-only).
+  // Permission: finance.cost.erpintegration.trigger
+  rpc ReconErpBatch(ReconErpBatchRequest) returns (ReconErpBatchResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/erp-integration/batches/{batch_id}/recon"
+      body: "*"
+    };
+  }
+
+  // ListErpCoverage lists coverage lines.
+  // Permission: finance.cost.erpintegration.view
+  rpc ListErpCoverage(ListErpCoverageRequest) returns (ListErpCoverageResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/erp-integration/batches/{batch_id}/coverage"};
+  }
+
+  // ExportErpCoverage exports coverage as xlsx.
+  // Permission: finance.cost.erpintegration.export
+  rpc ExportErpCoverage(ExportErpCoverageRequest) returns (ExportErpCoverageResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/erp-integration/batches/{batch_id}/coverage/export"};
+  }
+
+  // ExportErpRecon exports the recon outcome of a batch as xlsx.
+  // Permission: finance.cost.erpintegration.export
+  rpc ExportErpRecon(ExportErpReconRequest) returns (ExportErpReconResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/erp-integration/batches/{batch_id}/recon/export"};
+  }
+
+  // AckErpWarnings acknowledges validation warnings (audit ERP_WARN_ACK).
+  // Permission: finance.cost.erpintegration.approve
+  rpc AckErpWarnings(AckErpWarningsRequest) returns (AckErpWarningsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/erp-integration/batches/{batch_id}/ack-warnings"
+      body: "*"
+    };
+  }
+
+  // ListErpStdCost lists derived standard cost rows.
+  // Permission: finance.cost.erpintegration.view
+  rpc ListErpStdCost(ListErpStdCostRequest) returns (ListErpStdCostResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/erp-integration/batches/{batch_id}/std-cost"};
+  }
+
+  // PreviewErpPush returns control totals, row count and hash (no Oracle I/O).
+  // Permission: finance.cost.erpintegration.push
+  rpc PreviewErpPush(PreviewErpPushRequest) returns (PreviewErpPushResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/erp-integration/batches/{batch_id}/push/preview"};
+  }
+
+  // PushErpBatch pushes the batch to Oracle (flag push_enabled).
+  // Permission: finance.cost.erpintegration.push
+  rpc PushErpBatch(PushErpBatchRequest) returns (PushErpBatchResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/erp-integration/batches/{batch_id}/push"
+      body: "*"
+    };
+  }
+
+  // PreviewErpAdjOperation snapshots and previews an ADJ operation (read-only Oracle).
+  // Permission: finance.cost.erpintegration.valuate / .approve / .restore per operation
+  rpc PreviewErpAdjOperation(PreviewErpAdjOperationRequest) returns (PreviewErpAdjOperationResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/erp-integration/batches/{batch_id}/adj-preview"
+      body: "*"
+    };
+  }
+
+  // GetErpAdjPreview returns totals, excluded count, the V-07 result and a paged head list.
+  // Permission: finance.cost.erpintegration.view, or .valuate / .approve / .restore per operation
+  rpc GetErpAdjPreview(GetErpAdjPreviewRequest) returns (GetErpAdjPreviewResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/erp-integration/adj-previews/{preview_id}"};
+  }
+
+  // ExecuteErpAdjOperation executes a previewed ADJ operation (gates G1-G11).
+  // Permission: finance.cost.erpintegration.valuate / .approve / .restore per operation
+  rpc ExecuteErpAdjOperation(ExecuteErpAdjOperationRequest) returns (ExecuteErpAdjOperationResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/erp-integration/adj-previews/{preview_id}/execute"
+      body: "*"
+    };
+  }
+
+  // LockErpBatch locks the batch (LOCK_BATCH single call).
+  // Permission: finance.cost.erpintegration.lock
+  rpc LockErpBatch(LockErpBatchRequest) returns (LockErpBatchResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/erp-integration/batches/{batch_id}/lock"
+      body: "*"
+    };
+  }
+
+  // ListErpOracleCalls returns the Oracle call audit log.
+  // Permission: finance.cost.erpintegration.view
+  rpc ListErpOracleCalls(ListErpOracleCallsRequest) returns (ListErpOracleCallsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/erp-integration/batches/{batch_id}/oracle-calls"};
+  }
+
+  // LockErpPeriod locks a period.
+  // Permission: finance.cost.erpintegration.lock
+  rpc LockErpPeriod(LockErpPeriodRequest) returns (LockErpPeriodResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/erp-integration/periods/{period}/lock"
+      body: "*"
+    };
+  }
+
+  // UnlockErpPeriod unlocks a period.
+  // Permission: finance.cost.erpintegration.unlock
+  rpc UnlockErpPeriod(UnlockErpPeriodRequest) returns (UnlockErpPeriodResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/erp-integration/periods/{period}/unlock"
+      body: "*"
+    };
+  }
+
+  // GetErpPeriodLock returns the period lock state (used by the orchestrator cron).
+  // Permission: finance.cost.erpintegration.view
+  rpc GetErpPeriodLock(GetErpPeriodLockRequest) returns (GetErpPeriodLockResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/erp-integration/periods/{period}/lock"};
+  }
+
+  // LinkErpToProduct links an ERP item to a product (V-04/V-06/V-11/V-12; never writes grade codes).
+  // Permission: finance.cost.erpintegration.update
+  rpc LinkErpToProduct(LinkErpToProductRequest) returns (LinkErpToProductResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/erp-integration/links"
+      body: "*"
+    };
+  }
+
+  // CreateCostProductFromDemand creates a Yarn product from a demand line (MB is FailedPrecondition).
+  // Permission: finance.cost.erpintegration.update + existing product-master create
+  rpc CreateCostProductFromDemand(CreateCostProductFromDemandRequest) returns (CreateCostProductFromDemandResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/erp-integration/batches/{batch_id}/coverage/{cec_id}/create-product"
+      body: "*"
+    };
+  }
+
+  // GetErpItemLinkReport reports duplicate, unlinked and no-fg_type items.
+  // Permission: finance.cost.erpintegration.view
+  rpc GetErpItemLinkReport(GetErpItemLinkReportRequest) returns (GetErpItemLinkReportResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/erp-integration/link-report"};
+  }
+
+  // RunErpAttributeBackfill backfills empty attributes on linked products (dry_run default true).
+  // Permission: finance.cost.erpintegration.update
+  rpc RunErpAttributeBackfill(RunErpAttributeBackfillRequest) returns (RunErpAttributeBackfillResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/erp-integration/attr-backfill"
+      body: "*"
+    };
+  }
+
+  // RunErpMasterSync syncs OM_ITEM / OM_GRADE_CODE_1 into replicas (read-only Oracle).
+  // Permission: finance.cost.erpintegration.sync
+  rpc RunErpMasterSync(RunErpMasterSyncRequest) returns (RunErpMasterSyncResponse) {
+    option (google.api.http) = {post: "/api/v1/finance/erp-integration/master-sync"};
+  }
+
+  // ExportErpManualSample exports a stratified manual check sample (>=30 combos).
+  // Permission: finance.cost.erpintegration.export
+  rpc ExportErpManualSample(ExportErpManualSampleRequest) returns (ExportErpManualSampleResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/erp-integration/batches/{batch_id}/manual-sample"};
+  }
+
+  // GetErpCurrencySanity returns currency rate sanity checks for a period.
+  // Permission: finance.cost.erpintegration.view
+  rpc GetErpCurrencySanity(GetErpCurrencySanityRequest) returns (GetErpCurrencySanityResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/erp-integration/periods/{period}/currency-sanity"};
+  }
+
+  // GetErpIntegrationConfig returns flags, writer mode and Oracle IF configured (never secrets).
+  // Permission: finance.cost.erpintegration.view
+  rpc GetErpIntegrationConfig(GetErpIntegrationConfigRequest) returns (GetErpIntegrationConfigResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/erp-integration/config"};
+  }
+
+  // GetErpIntegrationSchedule returns the effective schedule and next run.
+  // Permission: finance.cost.erpintegration.view
+  rpc GetErpIntegrationSchedule(GetErpIntegrationScheduleRequest) returns (GetErpIntegrationScheduleResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/erp-integration/schedule"};
+  }
+
+  // UpdateErpIntegrationSchedule edits the settings-row schedule (cron validated server-side).
+  // Permission: finance.cost.erpintegration.update
+  rpc UpdateErpIntegrationSchedule(UpdateErpIntegrationScheduleRequest) returns (UpdateErpIntegrationScheduleResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/erp-integration/schedule"
+      body: "*"
+    };
+  }
+
+  // RunErpBacktest runs a SHADOW batch for a closed period.
+  // Permission: finance.cost.erpintegration.trigger
+  rpc RunErpBacktest(RunErpBacktestRequest) returns (RunErpBacktestResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/erp-integration/backtests"
+      body: "*"
+    };
+  }
+
+  // GetErpBacktestReport returns the per-period diff report.
+  // Permission: finance.cost.erpintegration.view + finance.cost.erpintegration.export
+  rpc GetErpBacktestReport(GetErpBacktestReportRequest) returns (GetErpBacktestReportResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/erp-integration/backtests/{batch_id}/report"};
+  }
+}
+
+// ErpBatchStatus is the batch lifecycle status.
+// ErpScheduleMode is how the integration schedule picks its run time.
+enum ErpScheduleMode {
+  ERP_SCHEDULE_MODE_UNSPECIFIED = 0;
+  ERP_SCHEDULE_MODE_END_OF_MONTH = 1;
+  ERP_SCHEDULE_MODE_START_OF_MONTH = 2;
+  ERP_SCHEDULE_MODE_DAY_OF_MONTH = 3;
+  ERP_SCHEDULE_MODE_SPECIFIC_DATE = 4;
+  ERP_SCHEDULE_MODE_CRON = 5;
+}
+
+enum ErpBatchStatus {
+  ERP_BATCH_STATUS_UNSPECIFIED = 0;
+  ERP_BATCH_STATUS_DRAFT = 1;
+  ERP_BATCH_STATUS_DEMAND_LOADED = 2;
+  ERP_BATCH_STATUS_COVERED = 3;
+  ERP_BATCH_STATUS_DERIVED = 4;
+  ERP_BATCH_STATUS_VALIDATED = 5;
+  ERP_BATCH_STATUS_PUSHED = 6;
+  ERP_BATCH_STATUS_VALUATED = 7;
+  ERP_BATCH_STATUS_RECONCILED = 8;
+  ERP_BATCH_STATUS_LOCKED = 9;
+  ERP_BATCH_STATUS_FAILED = 10;
+  ERP_BATCH_STATUS_SUPERSEDED = 11;
+}
+
+// ErpBatchMode distinguishes pushable LIVE batches from SHADOW (never pushed).
+enum ErpBatchMode {
+  ERP_BATCH_MODE_UNSPECIFIED = 0;
+  ERP_BATCH_MODE_LIVE = 1;
+  ERP_BATCH_MODE_SHADOW = 2;
+}
+
+// ErpAdjOperation is an Oracle adjustment operation.
+enum ErpAdjOperation {
+  ERP_ADJ_OPERATION_UNSPECIFIED = 0;
+  ERP_ADJ_OPERATION_VALUATE = 1;
+  ERP_ADJ_OPERATION_APPROVE = 2;
+  ERP_ADJ_OPERATION_RESTORE = 3;
+}
+
+// ErpCoverageStatus is the coverage result of a demand line.
+enum ErpCoverageStatus {
+  ERP_COVERAGE_STATUS_UNSPECIFIED = 0;
+  ERP_COVERAGE_STATUS_OK = 1;
+  ERP_COVERAGE_STATUS_NO_MAPPING = 2;
+  ERP_COVERAGE_STATUS_DUP_MAPPING = 3;
+  ERP_COVERAGE_STATUS_NO_COST = 4;
+  ERP_COVERAGE_STATUS_NOT_APPROVED = 5;
+  ERP_COVERAGE_STATUS_NOT_USD = 6;
+  ERP_COVERAGE_STATUS_INVALID = 7;
+}
+
+// ErpDeriveStatus is the derive result of a std-cost row.
+enum ErpDeriveStatus {
+  ERP_DERIVE_STATUS_UNSPECIFIED = 0;
+  ERP_DERIVE_STATUS_OK = 1;
+  ERP_DERIVE_STATUS_NO_AX = 2;
+  ERP_DERIVE_STATUS_NO_RULE = 3;
+  ERP_DERIVE_STATUS_NO_FG_TYPE = 4;
+  ERP_DERIVE_STATUS_NO_GRADE_GROUP = 5;
+  ERP_DERIVE_STATUS_NO_SELL_PRICE = 6;
+  ERP_DERIVE_STATUS_INVALID = 7;
+}
+
+// ErpStdSource is the origin of a standard cost.
+enum ErpStdSource {
+  ERP_STD_SOURCE_UNSPECIFIED = 0;
+  ERP_STD_SOURCE_GOAPPS_AX = 1;
+  ERP_STD_SOURCE_GOAPPS_DERIVED = 2;
+  ERP_STD_SOURCE_GOAPPS_MB = 3;
+}
+
+// ErpReconStatus is the reconciliation result vs the ADJ set.
+enum ErpReconStatus {
+  ERP_RECON_STATUS_UNSPECIFIED = 0;
+  ERP_RECON_STATUS_MATCH = 1;
+  ERP_RECON_STATUS_DIFF = 2;
+  ERP_RECON_STATUS_NOT_IN_ADJ = 3;
+  ERP_RECON_STATUS_NOT_COVERED = 4;
+}
+
+// ErpBacktestClass classifies a backtest line.
+enum ErpBacktestClass {
+  ERP_BACKTEST_CLASS_UNSPECIFIED = 0;
+  ERP_BACKTEST_CLASS_MATCH = 1;
+  ERP_BACKTEST_CLASS_DIFF = 2;
+  ERP_BACKTEST_CLASS_ONLY_GOAPPS = 3;
+  ERP_BACKTEST_CLASS_ONLY_LEGACY = 4;
+}
+
+// ErpBatch is one integration run for a period.
+message ErpBatch {
+  int64 batch_id = 1;
+  string period = 2;
+  ErpBatchMode mode = 3;
+  ErpBatchStatus status = 4;
+  int32 seq = 5;
+  string created_by = 6;
+  string created_at = 7;
+  string updated_at = 8;
+  // Raw JSON of ceib_summary.
+  string summary_json = 9;
+  int32 progress = 10;
+  repeated string allowed_actions = 11;
+  string failed_reason = 12;
+}
+
+// ErpCoverageLine is one demand line with its coverage result.
+message ErpCoverageLine {
+  int64 cec_id = 1;
+  string erp_item_code = 2;
+  string product_id = 3;
+  string product_code = 4;
+  string qty = 5;
+  string cost_usd = 6;
+  ErpCoverageStatus status = 7;
+  string message = 8;
+}
+
+// ErpStdCostRow is one derived standard cost row.
+message ErpStdCostRow {
+  int64 id = 1;
+  string erp_item_code = 2;
+  string basis = 3;
+  ErpStdSource source = 4;
+  ErpDeriveStatus derive_status = 5;
+  ErpReconStatus recon_status = 6;
+  string std_cost = 7;
+  string oracle_std_cost = 8;
+  string diff = 9;
+  string message = 10;
+  string grade_code = 11;
+  string shade_code = 12;
+}
+
+// ErpOracleCall is one audited Oracle call.
+message ErpOracleCall {
+  int64 id = 1;
+  string call_type = 2;
+  string status = 3;
+  string actor = 4;
+  string started_at = 5;
+  int64 duration_ms = 6;
+  string error = 7;
+  string ora_code = 8;
+  int32 attempts = 9;
+  string finished_at = 10;
+}
+
+// ErpAdjHead is one ADJ head in a preview.
+message ErpAdjHead {
+  string head_id = 1;
+  string item_code = 2;
+  string qty = 3;
+  string amount = 4;
+  bool excluded = 5;
+  string exclude_reason = 6;
+}
+
+// ErpV07Result is the V-07 pre-validation result.
+message ErpV07Result {
+  bool ok = 1;
+  repeated string offending_head_ids = 2;
+}
+
+// ErpAdjPreview is a snapshot preview of an ADJ operation.
+message ErpAdjPreview {
+  string preview_id = 1;
+  int64 batch_id = 2;
+  ErpAdjOperation operation = 3;
+  string set_hash = 4;
+  int64 head_count = 5;
+  int64 excluded_count = 6;
+  string total_amount = 7;
+  ErpV07Result v07 = 8;
+  repeated ErpAdjHead heads = 9;
+  string confirm_text = 10;
+  string created_at = 11;
+  string expires_at = 12; // ISO-8601; preview is unusable after this
+}
+
+// ErpPeriodLock is the lock state of a period.
+message ErpPeriodLock {
+  string period = 1;
+  bool locked = 2;
+  string reason = 3;
+  string locked_by = 4;
+  string locked_at = 5;
+}
+
+// ErpLinkReportRow is one item-link issue.
+message ErpLinkReportRow {
+  string category = 1;
+  string erp_item_code = 2;
+  string product_id = 3;
+  string product_code = 4;
+  string detail = 5;
+}
+
+// ErpCurrencySanityRow is one currency rate check.
+message ErpCurrencySanityRow {
+  string currency = 1;
+  string rate = 2;
+  bool ok = 3;
+  string message = 4;
+}
+
+// ErpIntegrationConfig exposes read-only flags (never secrets).
+message ErpIntegrationConfig {
+  // Flags mirror config erp_integration.* (all default false).
+  bool push_enabled = 1;
+  bool valuation_enabled = 2;
+  bool adj_approve_enabled = 3;
+  // writer_mode is disabled | fake | oracle.
+  string writer_mode = 4;
+  bool oracle_if_configured = 5;
+}
+
+// ErpSchedule is the effective integration schedule.
+message ErpSchedule {
+  bool enabled = 1;
+  string cron = 2;
+  int32 run_day_of_month = 3;
+  string run_time = 4;
+  string source = 5;
+  string next_run_at = 6;
+  repeated string validation_errors = 7;
+  ErpScheduleMode mode = 8;
+  string run_date = 9;
+  string timezone = 10;
+}
+
+// ErpBacktestLine is one backtest comparison line.
+message ErpBacktestLine {
+  string erp_item_code = 1;
+  string basis = 2;
+  ErpBacktestClass class = 3;
+  string goapps_std = 4;
+  string legacy_std = 5;
+  string diff = 6;
+  // delta_pct is diff / legacy * 100 (Round5); empty when legacy is 0 or NULL.
+  string delta_pct = 7;
+  // fail is true for an SP* basis line that is not MATCH (FAIL rule).
+  bool fail = 8;
+}
+
+// ErpBacktestReport is the per-period backtest diff report.
+message ErpBacktestReport {
+  int64 batch_id = 1;
+  string period = 2;
+  map<string, int64> counts = 3;
+  repeated ErpBacktestLine lines = 4;
+  bool failed = 5;
+}
+
+message CreateErpBatchRequest {
+  string period = 1 [(buf.validate.field).string.pattern = "^[0-9]{4}(0[1-9]|1[0-2])$"];
+  ErpBatchMode mode = 2 [(buf.validate.field).enum.defined_only = true];
+}
+
+message CreateErpBatchResponse {
+  common.v1.BaseResponse base = 1;
+  ErpBatch data = 2;
+}
+
+message ListErpBatchesRequest {
+  string period = 1 [(buf.validate.field).string.pattern = "^([0-9]{4}(0[1-9]|1[0-2]))?$"];
+  ErpBatchStatus status = 2;
+  ErpBatchMode mode = 3;
+  common.v1.PaginationRequest pagination = 4;
+}
+
+message ListErpBatchesResponse {
+  common.v1.BaseResponse base = 1;
+  repeated ErpBatch data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+message GetErpBatchRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetErpBatchResponse {
+  common.v1.BaseResponse base = 1;
+  ErpBatch data = 2;
+}
+
+message AbandonErpBatchRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+  string reason = 2 [(buf.validate.field).string = {
+    min_len: 10
+    max_len: 1000
+  }];
+}
+
+message AbandonErpBatchResponse {
+  common.v1.BaseResponse base = 1;
+  ErpBatch data = 2;
+}
+
+message LoadErpDemandRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message LoadErpDemandResponse {
+  common.v1.BaseResponse base = 1;
+  string job_id = 2;
+  int64 batch_id = 3;
+}
+
+message RunErpCoverageRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message RunErpCoverageResponse {
+  common.v1.BaseResponse base = 1;
+  string job_id = 2;
+  int64 batch_id = 3;
+}
+
+message RunErpDeriveRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message RunErpDeriveResponse {
+  common.v1.BaseResponse base = 1;
+  string job_id = 2;
+  int64 batch_id = 3;
+}
+
+message ValidateErpBatchRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message ValidateErpBatchResponse {
+  common.v1.BaseResponse base = 1;
+  string job_id = 2;
+  int64 batch_id = 3;
+}
+
+message ReconErpBatchRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message ReconErpBatchResponse {
+  common.v1.BaseResponse base = 1;
+  string job_id = 2;
+  int64 batch_id = 3;
+}
+
+message ListErpCoverageRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+  ErpCoverageStatus status = 2;
+  string search = 3;
+  common.v1.PaginationRequest pagination = 4;
+}
+
+message ListErpCoverageResponse {
+  common.v1.BaseResponse base = 1;
+  repeated ErpCoverageLine data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+message ExportErpCoverageRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message ExportErpCoverageResponse {
+  common.v1.BaseResponse base = 1;
+  bytes file_content = 2;
+  string file_name = 3;
+}
+
+message ExportErpReconRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message ExportErpReconResponse {
+  common.v1.BaseResponse base = 1;
+  bytes file_content = 2;
+  string file_name = 3;
+}
+
+message AckErpWarningsRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+  string reason = 2 [(buf.validate.field).string = {
+    min_len: 10
+    max_len: 1000
+  }];
+  // sha256 hex of the warning set being acknowledged (stale-ack guard).
+  string warning_set_hash = 3 [(buf.validate.field).string.pattern = "^[0-9a-f]{64}$"];
+}
+
+message AckErpWarningsResponse {
+  common.v1.BaseResponse base = 1;
+  ErpBatch data = 2;
+}
+
+message ListErpStdCostRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+  ErpStdSource source = 2;
+  ErpReconStatus recon_status = 3;
+  string basis = 4;
+  string status = 5;
+  common.v1.PaginationRequest pagination = 6;
+}
+
+message ListErpStdCostResponse {
+  common.v1.BaseResponse base = 1;
+  repeated ErpStdCostRow data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+message PreviewErpPushRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message PreviewErpPushResponse {
+  common.v1.BaseResponse base = 1;
+  int64 row_count = 2;
+  string sum_std = 3;
+  string set_hash = 4;
+  repeated string warnings = 5;
+}
+
+message PushErpBatchRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+  int64 confirm_row_count = 2 [(buf.validate.field).int64.gt = 0];
+  string confirm_sum_std = 3 [(buf.validate.field).string.min_len = 1];
+}
+
+message PushErpBatchResponse {
+  common.v1.BaseResponse base = 1;
+  string job_id = 2;
+  int64 batch_id = 3;
+}
+
+message PreviewErpAdjOperationRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+  ErpAdjOperation operation = 2 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+}
+
+message PreviewErpAdjOperationResponse {
+  common.v1.BaseResponse base = 1;
+  string job_id = 2;
+  int64 batch_id = 3;
+  string preview_id = 4;
+}
+
+message GetErpAdjPreviewRequest {
+  string preview_id = 1 [(buf.validate.field).string.uuid = true];
+  common.v1.PaginationRequest pagination = 2;
+}
+
+message GetErpAdjPreviewResponse {
+  common.v1.BaseResponse base = 1;
+  ErpAdjPreview data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+message ExecuteErpAdjOperationRequest {
+  string preview_id = 1 [(buf.validate.field).string.uuid = true];
+  string confirm_set_hash = 2 [(buf.validate.field).string.pattern = "^[0-9a-f]{64}$"];
+  string confirm_text = 3 [(buf.validate.field).string.pattern = "^\\d{6}/[0-9a-f-]{36}$"];
+}
+
+message ExecuteErpAdjOperationResponse {
+  common.v1.BaseResponse base = 1;
+  string job_id = 2;
+  int64 batch_id = 3;
+}
+
+message LockErpBatchRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message LockErpBatchResponse {
+  common.v1.BaseResponse base = 1;
+  ErpBatch data = 2;
+}
+
+message ListErpOracleCallsRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+  common.v1.PaginationRequest pagination = 2;
+}
+
+message ListErpOracleCallsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated ErpOracleCall data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+message LockErpPeriodRequest {
+  string period = 1 [(buf.validate.field).string.pattern = "^[0-9]{4}(0[1-9]|1[0-2])$"];
+  string reason = 2 [(buf.validate.field).string = {
+    min_len: 10
+    max_len: 1000
+  }];
+}
+
+message LockErpPeriodResponse {
+  common.v1.BaseResponse base = 1;
+  ErpPeriodLock data = 2;
+}
+
+message UnlockErpPeriodRequest {
+  string period = 1 [(buf.validate.field).string.pattern = "^[0-9]{4}(0[1-9]|1[0-2])$"];
+  string reason = 2 [(buf.validate.field).string = {
+    min_len: 10
+    max_len: 1000
+  }];
+}
+
+message UnlockErpPeriodResponse {
+  common.v1.BaseResponse base = 1;
+  ErpPeriodLock data = 2;
+}
+
+message GetErpPeriodLockRequest {
+  string period = 1 [(buf.validate.field).string.pattern = "^[0-9]{4}(0[1-9]|1[0-2])$"];
+}
+
+message GetErpPeriodLockResponse {
+  common.v1.BaseResponse base = 1;
+  ErpPeriodLock data = 2;
+}
+
+message LinkErpToProductRequest {
+  int64 product_sys_id = 1 [(buf.validate.field).int64.gte = 1];
+  string erp_item_code = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+}
+
+message LinkErpToProductResponse {
+  common.v1.BaseResponse base = 1;
+  int64 product_sys_id = 2;
+  string erp_item_code = 3;
+}
+
+message CreateCostProductFromDemandRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+  int64 cec_id = 2 [(buf.validate.field).int64.gt = 0];
+}
+
+message CreateCostProductFromDemandResponse {
+  common.v1.BaseResponse base = 1;
+  int64 product_sys_id = 2;
+}
+
+message GetErpItemLinkReportRequest {
+  common.v1.PaginationRequest pagination = 1;
+}
+
+message GetErpItemLinkReportResponse {
+  common.v1.BaseResponse base = 1;
+  repeated ErpLinkReportRow data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
+
+message RunErpAttributeBackfillRequest {
+  bool dry_run = 1;
+}
+
+message RunErpAttributeBackfillResponse {
+  common.v1.BaseResponse base = 1;
+  string job_id = 2;
+}
+
+message RunErpMasterSyncRequest {}
+
+message RunErpMasterSyncResponse {
+  common.v1.BaseResponse base = 1;
+  string job_id = 2;
+}
+
+message ExportErpManualSampleRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message ExportErpManualSampleResponse {
+  common.v1.BaseResponse base = 1;
+  bytes file_content = 2;
+  string file_name = 3;
+}
+
+message GetErpCurrencySanityRequest {
+  string period = 1 [(buf.validate.field).string.pattern = "^[0-9]{4}(0[1-9]|1[0-2])$"];
+}
+
+message GetErpCurrencySanityResponse {
+  common.v1.BaseResponse base = 1;
+  repeated ErpCurrencySanityRow data = 2;
+}
+
+message GetErpIntegrationConfigRequest {}
+
+message GetErpIntegrationConfigResponse {
+  common.v1.BaseResponse base = 1;
+  ErpIntegrationConfig data = 2;
+}
+
+message GetErpIntegrationScheduleRequest {}
+
+message GetErpIntegrationScheduleResponse {
+  common.v1.BaseResponse base = 1;
+  ErpSchedule data = 2;
+}
+
+message UpdateErpIntegrationScheduleRequest {
+  bool enabled = 1;
+  string cron = 2 [(buf.validate.field).string.max_len = 100];
+  int32 run_day_of_month = 3 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 31
+  }];
+  string run_time = 4 [(buf.validate.field).string.pattern = "^([01][0-9]|2[0-3]):[0-5][0-9]$"];
+  ErpScheduleMode mode = 5 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  string run_date = 6 [(buf.validate.field).string.pattern = "^$|^\\d{4}-\\d{2}-\\d{2}$"];
+  string timezone = 7 [(buf.validate.field).string.max_len = 64];
+}
+
+message UpdateErpIntegrationScheduleResponse {
+  common.v1.BaseResponse base = 1;
+  ErpSchedule data = 2;
+}
+
+message RunErpBacktestRequest {
+  string period = 1 [(buf.validate.field).string.pattern = "^[0-9]{4}(0[1-9]|1[0-2])$"];
+}
+
+message RunErpBacktestResponse {
+  common.v1.BaseResponse base = 1;
+  string job_id = 2;
+  int64 batch_id = 3;
+}
+
+message GetErpBacktestReportRequest {
+  int64 batch_id = 1 [(buf.validate.field).int64.gt = 0];
+  common.v1.PaginationRequest pagination = 2;
+}
+
+message GetErpBacktestReportResponse {
+  common.v1.BaseResponse base = 1;
+  ErpBacktestReport data = 2;
+  common.v1.PaginationResponse pagination = 3;
+}
