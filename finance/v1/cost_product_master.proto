@@ -37,6 +37,11 @@ message CostProductMaster {
   string flex_03 = 20;
   string source = 21; // origin marker, e.g. "MB_RECIPE" when auto-generated; empty if manually created
   bool is_locked = 22; // true blocks manual edits to route/params; escape hatch via UnlockCostProductMaster
+  string erp_fg_type = 23;
+  string erp_chp_item_code = 24;
+  string erp_ms_batch_item = 25;
+  string erp_item_type = 26;
+  string erp_prd_per_day = 27; // decimal string
 }
 
 // =============================================================================
@@ -59,6 +64,12 @@ message CreateCostProductMasterRequest {
   string flex_01 = 6 [(buf.validate.field).string.max_len = 255]; // legacy_erp_compound_key
   string flex_02 = 7 [(buf.validate.field).string.max_len = 100]; // legacy_oracle_sys_id
   string flex_03 = 8 [(buf.validate.field).string.max_len = 100]; // legacy_type_label
+  // ERP linkage identifiers (optional, empty = unset).
+  string erp_fg_type = 9 [(buf.validate.field).string.max_len = 15];
+  string erp_chp_item_code = 10 [(buf.validate.field).string.max_len = 50];
+  string erp_ms_batch_item = 11 [(buf.validate.field).string.max_len = 12];
+  string erp_item_type = 12 [(buf.validate.field).string.max_len = 20];
+  string erp_prd_per_day = 13 [(buf.validate.field).string.pattern = "^([0-9]{1,12}(\\.[0-9]{1,6})?)?$"]; // decimal string
 }
 
 message CreateCostProductMasterResponse {
@@ -107,6 +118,12 @@ message UpdateCostProductMasterRequest {
   string flex_01 = 6 [(buf.validate.field).string.max_len = 255]; // legacy_erp_compound_key
   string flex_02 = 7 [(buf.validate.field).string.max_len = 100]; // legacy_oracle_sys_id
   string flex_03 = 8 [(buf.validate.field).string.max_len = 100]; // legacy_type_label
+  // ERP linkage identifiers (optional, empty = unset).
+  string erp_fg_type = 9 [(buf.validate.field).string.max_len = 15];
+  string erp_chp_item_code = 10 [(buf.validate.field).string.max_len = 50];
+  string erp_ms_batch_item = 11 [(buf.validate.field).string.max_len = 12];
+  string erp_item_type = 12 [(buf.validate.field).string.max_len = 20];
+  string erp_prd_per_day = 13 [(buf.validate.field).string.pattern = "^([0-9]{1,12}(\\.[0-9]{1,6})?)?$"]; // decimal string
 }
 
 message UpdateCostProductMasterResponse {
@@ -124,6 +141,12 @@ message UpdateCostProductMasterErpLinkageRequest {
   string erp_item_code = 2 [(buf.validate.field).string.max_len = 50];
   string erp_grade_code_1 = 3 [(buf.validate.field).string.max_len = 20];
   string erp_grade_code_2 = 4 [(buf.validate.field).string.max_len = 20];
+  // ERP linkage identifiers (optional, empty = unset).
+  string erp_fg_type = 5 [(buf.validate.field).string.max_len = 15];
+  string erp_chp_item_code = 6 [(buf.validate.field).string.max_len = 50];
+  string erp_ms_batch_item = 7 [(buf.validate.field).string.max_len = 12];
+  string erp_item_type = 8 [(buf.validate.field).string.max_len = 20];
+  string erp_prd_per_day = 9 [(buf.validate.field).string.pattern = "^([0-9]{1,12}(\\.[0-9]{1,6})?)?$"]; // decimal string
 }
 
 message UpdateCostProductMasterErpLinkageResponse {
