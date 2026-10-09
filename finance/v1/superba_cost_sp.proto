@@ -1,0 +1,234 @@
+syntax = "proto3";
+
+package finance.v1;
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "finance/v1/uom.proto";
+import "google/api/annotations.proto";
+
+// =============================================================================
+// SuperbaCostSpService — master "Superba Cost SP" CRUD + Oracle sync, backed by
+// cost_superba_cost_sp.
+//
+// For SUPERBA products only, TOP 73 MB_COST_MKT takes old_value from the row
+// whose shade_code matches the product's shade code. Where several rows share a
+// shade code, the row with the largest legacy_sys_id is the effective one.
+// new_value is stored for information only and is never used in calculation.
+//
+// Rows come from a CSV seed (source SEED), manual entry (MANUAL) or the Oracle
+// legacy sync (ORACLE). SyncSuperbaCostSps upserts by legacy_sys_id and
+// overwrites existing rows, including MANUAL ones (source becomes ORACLE).
+// DeleteSuperbaCostSp is a soft delete.
+// =============================================================================
+
+// SuperbaCostSp represents one row of the Superba Cost SP master.
+message SuperbaCostSp {
+  // UUID primary key.
+  string id = 1;
+  // Legacy (Oracle) Sys Id — the upsert key for sync.
+  int64 legacy_sys_id = 2;
+  // Shade code, stored trimmed. Matched case-insensitively to the product shade.
+  string shade_code = 3;
+  // Superba colour name (shown for TOP 64 MB_SP_DYE).
+  string colour_name = 4;
+  // Value used by the calculation as MB cost marketing.
+  double old_value = 5;
+  // Informational value only; never used in calculation. Unset when absent.
+  optional double new_value = 6;
+  // Provenance: "MANUAL", "ORACLE" or "SEED".
+  string source = 7;
+  // Whether the row is active.
+  bool is_active = 8;
+  // True when this row is the one selected for its shade code (largest
+  // legacy_sys_id among active rows). Read-only, derived.
+  bool effective = 9;
+  // Audit metadata.
+  common.v1.AuditInfo audit = 16;
+}
+
+// CreateSuperbaCostSpRequest creates a hand-authored (MANUAL) row.
+message CreateSuperbaCostSpRequest {
+  // Legacy Sys Id (unique).
+  int64 legacy_sys_id = 1 [(buf.validate.field).int64.gt = 0];
+  // Shade code (max 50 chars).
+  string shade_code = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 50
+  }];
+  // Colour name (max 200 chars).
+  string colour_name = 3 [(buf.validate.field).string.max_len = 200];
+  // Old value (used by calculation).
+  double old_value = 4 [(buf.validate.field).double.gte = 0];
+  // Optional new value (information only).
+  optional double new_value = 5 [(buf.validate.field).double.gte = 0];
+  // Whether the row is active.
+  bool is_active = 6;
+}
+
+// CreateSuperbaCostSpResponse is the response for creating a row.
+message CreateSuperbaCostSpResponse {
+  common.v1.BaseResponse base = 1;
+  SuperbaCostSp data = 2;
+}
+
+// GetSuperbaCostSpRequest retrieves a row by id.
+message GetSuperbaCostSpRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetSuperbaCostSpResponse is the response for retrieving a row.
+message GetSuperbaCostSpResponse {
+  common.v1.BaseResponse base = 1;
+  SuperbaCostSp data = 2;
+}
+
+// UpdateSuperbaCostSpRequest updates a row. legacy_sys_id is immutable.
+message UpdateSuperbaCostSpRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  // Updated shade code (max 50 chars).
+  optional string shade_code = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 50
+  }];
+  // Updated colour name (max 200 chars).
+  optional string colour_name = 3 [(buf.validate.field).string.max_len = 200];
+  // Updated old value.
+  optional double old_value = 4 [(buf.validate.field).double.gte = 0];
+  // Updated new value.
+  optional double new_value = 5 [(buf.validate.field).double.gte = 0];
+  // Updated active status.
+  optional bool is_active = 6;
+}
+
+// UpdateSuperbaCostSpResponse is the response for updating a row.
+message UpdateSuperbaCostSpResponse {
+  common.v1.BaseResponse base = 1;
+  SuperbaCostSp data = 2;
+}
+
+// DeleteSuperbaCostSpRequest soft-deletes a row.
+message DeleteSuperbaCostSpRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteSuperbaCostSpResponse is the response for deleting a row.
+message DeleteSuperbaCostSpResponse {
+  common.v1.BaseResponse base = 1;
+}
+
+// ListSuperbaCostSpsRequest lists rows with search, filter, sort and pagination.
+message ListSuperbaCostSpsRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 1];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Search across shade code and colour name.
+  string search = 3 [(buf.validate.field).string.max_len = 100];
+  // Filter by active status.
+  ActiveFilter active_filter = 4;
+  // Filter by provenance. Empty = all.
+  string source_filter = 5 [(buf.validate.field).string = {
+    in: [
+      "",
+      "MANUAL",
+      "ORACLE",
+      "SEED"
+    ]
+  }];
+  // Sort field.
+  string sort_by = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "shade_code",
+      "colour_name",
+      "old_value",
+      "new_value",
+      "legacy_sys_id",
+      "source",
+      "is_active",
+      "created_at",
+      "updated_at"
+    ]
+  }];
+  // Sort direction.
+  string sort_order = 7 [(buf.validate.field).string = {
+    in: [
+      "",
+      "asc",
+      "desc"
+    ]
+  }];
+}
+
+// ListSuperbaCostSpsResponse is the response for listing rows.
+message ListSuperbaCostSpsResponse {
+  common.v1.BaseResponse base = 1;
+  repeated SuperbaCostSp data = 2;
+  common.v1.PaginationResponse pagination = 3;
+  // Timestamp (ISO 8601) of the last Oracle sync, empty if never synced.
+  string last_synced_at = 4;
+}
+
+// SyncSuperbaCostSpsRequest triggers an Oracle legacy to Postgres sync. Upserts
+// by legacy_sys_id: new rows are inserted, existing rows are updated (including
+// MANUAL ones, whose source becomes ORACLE). Runs synchronously.
+message SyncSuperbaCostSpsRequest {}
+
+// SyncSuperbaCostSpsResponse reports the outcome of one sync run.
+message SyncSuperbaCostSpsResponse {
+  common.v1.BaseResponse base = 1;
+  // Total rows read from the source.
+  int32 total_rows = 2;
+  // Rows newly inserted.
+  int32 inserted = 3;
+  // Rows whose values changed and were updated.
+  int32 updated = 4;
+  // Rows already identical to the source.
+  int32 unchanged = 5;
+  // Rows ignored (e.g. empty shade code or missing value).
+  int32 skipped = 6;
+  // Wall-clock duration of the sync, in milliseconds.
+  int64 duration_ms = 7;
+  // Human-readable summary.
+  string message = 8;
+}
+
+// SuperbaCostSpService manages the Superba Cost SP master.
+service SuperbaCostSpService {
+  // CreateSuperbaCostSp creates a hand-authored (MANUAL) row.
+  rpc CreateSuperbaCostSp(CreateSuperbaCostSpRequest) returns (CreateSuperbaCostSpResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/superba-cost-sps"
+      body: "*"
+    };
+  }
+  // GetSuperbaCostSp retrieves a row by id.
+  rpc GetSuperbaCostSp(GetSuperbaCostSpRequest) returns (GetSuperbaCostSpResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/superba-cost-sps/{id}"};
+  }
+  // UpdateSuperbaCostSp updates a row.
+  rpc UpdateSuperbaCostSp(UpdateSuperbaCostSpRequest) returns (UpdateSuperbaCostSpResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/finance/superba-cost-sps/{id}"
+      body: "*"
+    };
+  }
+  // DeleteSuperbaCostSp soft-deletes a row.
+  rpc DeleteSuperbaCostSp(DeleteSuperbaCostSpRequest) returns (DeleteSuperbaCostSpResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/superba-cost-sps/{id}"};
+  }
+  // ListSuperbaCostSps lists rows with search, filter, sort and pagination.
+  rpc ListSuperbaCostSps(ListSuperbaCostSpsRequest) returns (ListSuperbaCostSpsResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/superba-cost-sps"};
+  }
+  // SyncSuperbaCostSps pulls the master from the Oracle legacy source and
+  // upserts by legacy_sys_id.
+  rpc SyncSuperbaCostSps(SyncSuperbaCostSpsRequest) returns (SyncSuperbaCostSpsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/superba-cost-sps/sync"
+      body: "*"
+    };
+  }
+}

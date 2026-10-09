@@ -110,6 +110,10 @@ message RequiredParamEntry {
   bool value_flag = 23;
   string filled_at = 30;
   string filled_by = 31;
+  // Optional read-time display text that replaces/augments the stored value in
+  // the UI (e.g. Superba colour name for MB_SP_DYE on SUPERBA products). Empty =
+  // none. Never stored; the stored value stays editable.
+  string display_value = 32;
 }
 
 // =============================================================================
