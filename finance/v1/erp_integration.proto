@@ -797,6 +797,9 @@ message UnlockErpPeriodRequest {
     min_len: 10
     max_len: 1000
   }];
+  // SUPER_ADMIN only: unlock even when the ERP ADJ period is posted (GoApps
+  // lock only; Oracle is never touched). Requires a reason; audited.
+  bool override_posted = 3;
 }
 
 message UnlockErpPeriodResponse {
