@@ -352,6 +352,10 @@ message CostRMDetail {
   // Route level this RM edge feeds (1 = FG; 2..N upstream). Already stored in
   // cpc_rm_cost_detail JSON; previously omitted from the contract.
   int32 route_level = 8;
+  // Denier of the RM group head. Only set for DENIER ratio-mode products.
+  double denier = 9;
+  // Source of the ratio (e.g. DENIER, SPANDEX_DRAFT). Only set for DENIER ratio-mode products.
+  string ratio_source = 10;
 }
 
 // FormulaEval traces one formula evaluation step.
