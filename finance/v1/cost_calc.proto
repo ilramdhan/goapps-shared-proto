@@ -689,6 +689,23 @@ message GetRouteCostSheetResponse {
   repeated RouteCostSheetStage stages = 2;
 }
 
+// CostSheetExportLayout selects the workbook shape a product cost sheet
+// export renders. UNSPECIFIED behaves exactly like COMBINED, so callers that
+// predate the field keep today's output.
+enum CostSheetExportLayout {
+  // Not set; treated as COMBINED.
+  COST_SHEET_EXPORT_LAYOUT_UNSPECIFIED = 0;
+  // Flat "all data" sheet plus one vertical sheet per product, at most
+  // 200 products per file (larger selections fan out into a batch).
+  COST_SHEET_EXPORT_LAYOUT_COMBINED = 1;
+  // Only the flat "all data" sheet (one row per route stage) in a single
+  // file; not chunked at 200 products.
+  COST_SHEET_EXPORT_LAYOUT_HORIZONTAL = 2;
+  // Only the per-product vertical sheets (no "all data" sheet), at most
+  // 200 products per file.
+  COST_SHEET_EXPORT_LAYOUT_VERTICAL = 3;
+}
+
 // RequestProductCostSheetExportRequest queues an async product-cost-sheet
 // export job. Carries the same filter shape as ListCostResultsRequest, plus an
 // optional explicit product selection that overrides the filter when non-empty.
@@ -713,6 +730,8 @@ message RequestProductCostSheetExportRequest {
   // Raw-material group code filter, matched against GROUP-type RM lines
   // (empty = all raw materials).
   repeated string rm_group_codes = 8 [(buf.validate.field).repeated.max_items = 200];
+  // Workbook layout (UNSPECIFIED = COMBINED, today's behaviour).
+  CostSheetExportLayout layout = 9 [(buf.validate.field).enum.defined_only = true];
 }
 
 // RequestProductCostSheetExportResponse acknowledges the queued job.
@@ -741,6 +760,9 @@ message ProductCostSheetExportJobInfo {
   int32 completed_children = 6;
   // Child jobs that finished FAILED so far.
   int32 failed_children = 7;
+  // Workbook layout the job renders (jobs queued before the field existed
+  // report COMBINED).
+  CostSheetExportLayout layout = 8;
 }
 
 // GetProductCostSheetDownloadURLRequest identifies the export job whose
@@ -990,6 +1012,9 @@ message ExportJobSummary {
   // True when this job is a batch-tracking parent fanned out into multiple
   // child export jobs; false for a standalone single job.
   bool is_batch = 9;
+  // Workbook layout the job renders (jobs queued before the field existed
+  // report COMBINED).
+  CostSheetExportLayout layout = 10;
 }
 
 // CostCalcService runs the cost calculation engine and exposes results.
