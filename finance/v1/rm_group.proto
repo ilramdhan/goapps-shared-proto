@@ -154,6 +154,8 @@ message RMGroupHead {
   // group is selectable as an OIL_NAME option (lookup master RM_GROUP_OIL) and
   // its per-period rate drives OIL_RATE in the costing engine.
   bool is_oil_group = 22;
+  // Nominal denier of the RM group (e.g. spandex 20/40/70). Optional; used by DENIER ratio-mode products: spandex denier = denier / SPANDEX_DRAFT.
+  double denier = 24;
   // Carry-forward provenance of the per-period values overlaid on this head
   // (only meaningful when the head is read for a specific period).
   // Empty = an exact row exists for the requested period; "ANCHOR" = values
@@ -307,6 +309,8 @@ message CreateRMGroupRequest {
   RMMarketingFlag marketing_flag = 12;
   // Mark the new group as an oil group (global, not per period). Defaults to false.
   bool is_oil_group = 13;
+  // Nominal denier of the RM group (e.g. spandex 20/40/70). Optional; used by DENIER ratio-mode products: spandex denier = denier / SPANDEX_DRAFT.
+  optional double denier = 14 [(buf.validate.field).double.gte = 0];
 }
 
 // Create response.
@@ -404,6 +408,8 @@ message UpdateRMGroupRequest {
   // leaves it unchanged. Un-flagging a group still referenced by product
   // OIL_NAME values is rejected by the backend (ErrOilGroupInUse).
   optional bool is_oil_group = 27;
+  // Nominal denier of the RM group (e.g. spandex 20/40/70). Optional; used by DENIER ratio-mode products: spandex denier = denier / SPANDEX_DRAFT.
+  optional double denier = 28 [(buf.validate.field).double.gte = 0];
 }
 
 // Update response.

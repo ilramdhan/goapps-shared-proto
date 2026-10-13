@@ -22,6 +22,8 @@ message CostProductType {
   // Oil class of the product type: "" (no oil), "PTY", "POY" or "SUPERBA".
   // Drives IS_PTY/IS_POY/IS_SUPERBA flags and OIL_RATE resolution in costing.
   string oil_class = 5;
+  // RM ratio mode: INPUT (route ratio as entered, default) or DENIER (ratio = denier share, used by MEL/ACY).
+  string rm_ratio_mode = 6;
   common.v1.AuditInfo audit = 16;
 }
 
@@ -34,6 +36,14 @@ message CreateCostProductTypeRequest {
   string type_name = 2 [(buf.validate.field).string = {
     min_len: 1
     max_len: 100
+  }];
+  // RM ratio mode: INPUT (route ratio as entered, default) or DENIER (ratio = denier share, used by MEL/ACY). Empty defaults to INPUT.
+  string rm_ratio_mode = 3 [(buf.validate.field).string = {
+    in: [
+      "",
+      "INPUT",
+      "DENIER"
+    ]
   }];
 }
 
@@ -58,6 +68,14 @@ message UpdateCostProductTypeRequest {
     max_len: 100
   }];
   bool is_active = 3;
+  // RM ratio mode: INPUT (route ratio as entered, default) or DENIER (ratio = denier share, used by MEL/ACY). Empty leaves unchanged.
+  string rm_ratio_mode = 4 [(buf.validate.field).string = {
+    in: [
+      "",
+      "INPUT",
+      "DENIER"
+    ]
+  }];
 }
 
 message UpdateCostProductTypeResponse {
