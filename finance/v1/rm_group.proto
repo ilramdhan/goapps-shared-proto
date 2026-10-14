@@ -156,6 +156,8 @@ message RMGroupHead {
   bool is_oil_group = 22;
   // Nominal denier of the RM group (e.g. spandex 20/40/70). Optional; used by DENIER ratio-mode products: spandex denier = denier / SPANDEX_DRAFT.
   double denier = 24;
+  // When true the group denier is divided by the product's SPANDEX_DRAFT (spandex). False: denier used as-is (bought-out POY/FDY).
+  bool denier_use_draft = 25;
   // Carry-forward provenance of the per-period values overlaid on this head
   // (only meaningful when the head is read for a specific period).
   // Empty = an exact row exists for the requested period; "ANCHOR" = values
@@ -311,6 +313,8 @@ message CreateRMGroupRequest {
   bool is_oil_group = 13;
   // Nominal denier of the RM group (e.g. spandex 20/40/70). Optional; used by DENIER ratio-mode products: spandex denier = denier / SPANDEX_DRAFT.
   optional double denier = 14 [(buf.validate.field).double.gte = 0];
+  // When true the group denier is divided by the product's SPANDEX_DRAFT (spandex). False: denier used as-is (bought-out POY/FDY).
+  optional bool denier_use_draft = 15;
 }
 
 // Create response.
@@ -410,6 +414,8 @@ message UpdateRMGroupRequest {
   optional bool is_oil_group = 27;
   // Nominal denier of the RM group (e.g. spandex 20/40/70). Optional; used by DENIER ratio-mode products: spandex denier = denier / SPANDEX_DRAFT.
   optional double denier = 28 [(buf.validate.field).double.gte = 0];
+  // When true the group denier is divided by the product's SPANDEX_DRAFT (spandex). False: denier used as-is (bought-out POY/FDY).
+  optional bool denier_use_draft = 29;
 }
 
 // Update response.
