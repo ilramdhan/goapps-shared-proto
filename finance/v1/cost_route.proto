@@ -29,6 +29,8 @@ message CostRouteHead {
   string unlocked_by = 19;
   string unlocked_at = 20;
   common.v1.AuditInfo audit = 16;
+  // RM ratio mode of the product ("INPUT" | "DENIER"). Response-only; ignored on save.
+  string rm_ratio_mode = 21;
 }
 
 // CostRouteSeq is one stage of the route at a given level + ordering.
@@ -54,6 +56,8 @@ message CostRouteSeq {
   string origin_product_code = 16;
   // Flattening depth of this stage (0 = native to the requested head).
   int32 nest_depth = 17;
+  // RM ratio mode of the product owning this stage ("INPUT" | "DENIER"). Response-only; ignored on save.
+  string rm_ratio_mode = 18;
 }
 
 // CostRouteRm is one input edge feeding a SEQ.
@@ -98,6 +102,16 @@ message CostRouteRm {
   // Product name of the referenced product (read-time join on rm_product_sys_id).
   // Populated only for PRODUCT-type rows; empty for ITEM/GROUP rows.
   string rm_product_name = 25;
+  // Response-only (ignored on save): ratio actually used by the calc engine for this line.
+  // Equals route_rm_ratio for INPUT-mode products or non-denier lines.
+  double computed_ratio = 26;
+  // "" for INPUT-mode products, "DENIER" for denier-derived lines,
+  // "INPUT" for lines in a DENIER-mode product that keep the route ratio.
+  string ratio_source = 27;
+  // Line denier used: upstream DENIER, or group denier / SPANDEX_DRAFT.
+  double denier = 28;
+  // Explanatory note, e.g. missing denier treated as 0.
+  string ratio_note = 29;
 }
 
 // RouteGraph bundles the head + all seqs (with rms inline).
