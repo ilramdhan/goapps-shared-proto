@@ -1,0 +1,269 @@
+syntax = "proto3";
+
+package finance.v1;
+
+import "buf/validate/validate.proto";
+import "common/v1/common.proto";
+import "finance/v1/cost_product_param_bulk.proto";
+import "google/api/annotations.proto";
+
+// =============================================================================
+// MESSAGES — Scope
+// =============================================================================
+
+// LookupMasterRef identifies one master record whose derived product params
+// should be re-synced (e.g. MACHINE + mc_code).
+message LookupMasterRef {
+  // mst_parameter.lookup_master_code: "MACHINE" | "INTERMINGLING" |
+  // "PRODUCT_GRADE" | "MB_HEAD" | "MB_SPIN" | "BOX_BOBBIN_COST".
+  string lookup_master_code = 1 [(buf.validate.field).string = {
+    in: [
+      "MACHINE",
+      "INTERMINGLING",
+      "PRODUCT_GRADE",
+      "MB_HEAD",
+      "MB_SPIN",
+      "BOX_BOBBIN_COST"
+    ]
+  }];
+  // Business key of the master record (mc_code, intm_code, pg_code,
+  // mbh_mb_costing, mb spin key, bbc_code).
+  string master_key = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+}
+
+// LookupSyncProductIDs targets an explicit list of products.
+message LookupSyncProductIDs {
+  // cost_product_master.cpm_product_sys_id values. 1-5000 items.
+  repeated int64 product_sys_ids = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 5000
+  }];
+}
+
+// LookupSyncProductFilter targets every product matching the Product Master
+// list filter (same semantics as ListCostProductMastersRequest).
+message LookupSyncProductFilter {
+  string search = 1 [(buf.validate.field).string.max_len = 200];
+  repeated int32 product_type_ids = 2;
+  string shade_code = 3 [(buf.validate.field).string.max_len = 50];
+  string active_filter = 4 [(buf.validate.field).string = {
+    in: [
+      "",
+      "all",
+      "active",
+      "inactive"
+    ]
+  }];
+}
+
+// LookupSyncScope selects which products (and which lookup triggers on them)
+// a preview or apply covers.
+message LookupSyncScope {
+  oneof scope {
+    option (buf.validate.oneof).required = true;
+    // Every product whose lookup param currently points at this master record.
+    LookupMasterRef master_ref = 1;
+    // Every lookup trigger on these products.
+    LookupSyncProductIDs product_ids = 2;
+    // Every lookup trigger on products matching this filter.
+    LookupSyncProductFilter filter = 3;
+  }
+}
+
+// =============================================================================
+// MESSAGES — Plan / preview shapes
+// =============================================================================
+
+// LookupSyncValueChange is one derived param value that differs from master.
+message LookupSyncValueChange {
+  // mst_parameter.param_id (UUID).
+  string param_id = 1;
+  string param_code = 2;
+  string param_name = 3;
+  // Current stored value as text ("" when empty).
+  string old_value = 4;
+  // Value the sync would write ("" when the child is cleared).
+  string new_value = 5;
+  // "SET" or "CLEAR".
+  string change_kind = 6;
+}
+
+// LookupSyncItem is one (product, lookup trigger param) pair in a plan.
+message LookupSyncItem {
+  int64 product_sys_id = 1;
+  string product_code = 2;
+  string product_name = 3;
+  // Trigger param (MASTER_LOOKUP type) code, e.g. "MC_CODE".
+  string trigger_param_code = 4;
+  // lookup_master_code of the trigger param.
+  string lookup_master_code = 5;
+  // Master key stored on the product for that trigger.
+  string master_key = 6;
+  // Empty when the item will be applied. Otherwise one of: "LOCKED",
+  // "KEY_EMPTY", "KEY_NOT_FOUND", "MB_SPIN_AMBIGUOUS".
+  string skip_reason = 7;
+  // Values that would change (empty when already in sync or skipped).
+  repeated LookupSyncValueChange changes = 8;
+}
+
+// LookupSyncSummary aggregates a whole plan (not just the current page).
+message LookupSyncSummary {
+  // Distinct products in scope that have at least one lookup trigger.
+  int32 total_products = 1;
+  // Distinct products with at least one value change (not skipped).
+  int32 products_with_changes = 2;
+  // Total value changes across all applicable items.
+  int32 total_value_changes = 3;
+  // Distinct products skipped because cpm_is_locked.
+  int32 locked_products = 4;
+  // Item counts by skip_reason.
+  map<string, int32> skip_counts = 5;
+  // Opaque hash of the planned changes. Apply rejects with 409 when the
+  // re-computed plan no longer matches.
+  string plan_fingerprint = 6;
+}
+
+// =============================================================================
+// MESSAGES — CountLookupUsage
+// =============================================================================
+
+// CountLookupUsageRequest asks how many products use a master record, for the
+// banner shown after a master is saved.
+message CountLookupUsageRequest {
+  string lookup_master_code = 1 [(buf.validate.field).string = {
+    in: [
+      "MACHINE",
+      "INTERMINGLING",
+      "PRODUCT_GRADE",
+      "MB_HEAD",
+      "MB_SPIN",
+      "BOX_BOBBIN_COST"
+    ]
+  }];
+  string master_key = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+}
+
+// CountLookupUsageResponse returns the plan summary for one master record.
+message CountLookupUsageResponse {
+  common.v1.BaseResponse base = 1;
+  LookupSyncSummary data = 2;
+}
+
+// =============================================================================
+// MESSAGES — PreviewLookupSync
+// =============================================================================
+
+// PreviewLookupSyncRequest computes the old→new plan for a scope, paged by item.
+message PreviewLookupSyncRequest {
+  LookupSyncScope scope = 1 [(buf.validate.field).required = true];
+  common.v1.PaginationRequest pagination = 2;
+  // When TRUE, only items with changes or a skip reason are returned.
+  bool only_actionable = 3;
+}
+
+// PreviewLookupSyncResponse returns one page of plan items plus the summary.
+message PreviewLookupSyncResponse {
+  common.v1.BaseResponse base = 1;
+  LookupSyncSummary summary = 2;
+  repeated LookupSyncItem items = 3;
+  common.v1.PaginationResponse pagination = 4;
+}
+
+// =============================================================================
+// MESSAGES — ApplyLookupSync
+// =============================================================================
+
+// ApplyLookupSyncRequest queues a background job that applies the plan.
+message ApplyLookupSyncRequest {
+  LookupSyncScope scope = 1 [(buf.validate.field).required = true];
+  // plan_fingerprint from the preview the user confirmed.
+  string plan_fingerprint = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+// ApplyLookupSyncResponse returns the queued job (or 409 status_code when the
+// plan drifted since preview).
+message ApplyLookupSyncResponse {
+  common.v1.BaseResponse base = 1;
+  BulkParamJobInfo data = 2;
+  // Plan as re-computed at apply time.
+  LookupSyncSummary summary = 3;
+}
+
+// =============================================================================
+// MESSAGES — Job status
+// =============================================================================
+
+// GetLookupSyncJobStatusRequest identifies a lookup-sync job.
+message GetLookupSyncJobStatusRequest {
+  string job_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetLookupSyncJobStatusResponse reports live job progress.
+message GetLookupSyncJobStatusResponse {
+  common.v1.BaseResponse base = 1;
+  BulkParamJobInfo data = 2;
+  // Products skipped at apply time (locked between preview and apply, etc.).
+  int32 skipped_children = 3;
+  // Total param values written by the job so far.
+  int32 values_written = 4;
+}
+
+// ListLookupSyncJobFailuresRequest identifies a lookup-sync job.
+message ListLookupSyncJobFailuresRequest {
+  string job_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// ListLookupSyncJobFailuresResponse lists per-product failures and skips.
+message ListLookupSyncJobFailuresResponse {
+  common.v1.BaseResponse base = 1;
+  repeated BulkProductParamJobFailure failures = 2;
+}
+
+// =============================================================================
+// SERVICE
+// =============================================================================
+
+// CostProductLookupSyncService re-syncs product params derived from master
+// lookups (Machine, Intermingling, Product Grade, MB Head, MB Spin, Box/Bobbin
+// cost) after the master record is edited. Sync always overwrites derived
+// params with the master's current values, mirroring a re-pick in the form.
+service CostProductLookupSyncService {
+  // CountLookupUsage summarizes how many products use a master record and how
+  // many values would change.
+  rpc CountLookupUsage(CountLookupUsageRequest) returns (CountLookupUsageResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/lookup-sync/usage"};
+  }
+
+  // PreviewLookupSync returns the paged old→new plan for a scope.
+  rpc PreviewLookupSync(PreviewLookupSyncRequest) returns (PreviewLookupSyncResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/lookup-sync/preview"
+      body: "*"
+    };
+  }
+
+  // ApplyLookupSync re-plans the scope and, if it still matches the confirmed
+  // fingerprint, queues a background job that writes the values.
+  rpc ApplyLookupSync(ApplyLookupSyncRequest) returns (ApplyLookupSyncResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/lookup-sync/apply"
+      body: "*"
+    };
+  }
+
+  // GetLookupSyncJobStatus polls a lookup-sync job.
+  rpc GetLookupSyncJobStatus(GetLookupSyncJobStatusRequest) returns (GetLookupSyncJobStatusResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/lookup-sync/jobs/{job_id}/status"};
+  }
+
+  // ListLookupSyncJobFailures lists failed/skipped products of a lookup-sync job.
+  rpc ListLookupSyncJobFailures(ListLookupSyncJobFailuresRequest) returns (ListLookupSyncJobFailuresResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/lookup-sync/jobs/{job_id}/failures"};
+  }
+}
