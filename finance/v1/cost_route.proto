@@ -112,6 +112,8 @@ message CostRouteRm {
   double denier = 28;
   // Explanatory note, e.g. missing denier treated as 0.
   string ratio_note = 29;
+  // True when the denier used for this line comes from a per-product override.
+  bool denier_overridden = 30;
 }
 
 // RouteGraph bundles the head + all seqs (with rms inline).
