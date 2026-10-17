@@ -302,6 +302,85 @@ message DuplicateProductResponse {
   string new_product_code = 3;
 }
 
+// RMDenierOverride is a per-product denier override for one RM (product or group).
+message RMDenierOverride {
+  int64 id = 1;
+  int64 product_sys_id = 2;
+  // PRODUCT | GROUP.
+  string rm_type = 3;
+  int64 rm_product_sys_id = 4;
+  string rm_product_code = 5;
+  string rm_product_name = 6;
+  string rm_group_code = 7;
+  string rm_group_name = 8;
+  double denier = 9;
+  string reason = 10;
+  string created_at = 11;
+  string created_by = 12;
+  string updated_at = 13;
+  string updated_by = 14;
+}
+
+// DuplicateProductRef identifies a product sharing the same duplicate family.
+message DuplicateProductRef {
+  int64 product_sys_id = 1;
+  string product_code = 2;
+  string product_name = 3;
+}
+
+message ListRMDenierOverridesRequest {
+  int64 product_sys_id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message ListRMDenierOverridesResponse {
+  common.v1.BaseResponse base = 1;
+  repeated RMDenierOverride data = 2;
+  repeated DuplicateProductRef duplicate_products = 3;
+}
+
+message UpsertRMDenierOverrideRequest {
+  int64 product_sys_id = 1 [(buf.validate.field).int64.gt = 0];
+  string rm_type = 2 [(buf.validate.field).string = {
+    in: [
+      "PRODUCT",
+      "GROUP"
+    ]
+  }];
+  int64 rm_product_sys_id = 3 [(buf.validate.field).int64.gte = 0];
+  string rm_group_code = 4 [(buf.validate.field).string.max_len = 30];
+  double denier = 5 [(buf.validate.field).double.gt = 0];
+  string reason = 6 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 500
+  }];
+  bool apply_to_duplicates = 7;
+}
+
+message UpsertRMDenierOverrideResponse {
+  common.v1.BaseResponse base = 1;
+  RMDenierOverride data = 2;
+  repeated int64 applied_product_sys_ids = 3;
+}
+
+message DeleteRMDenierOverrideRequest {
+  int64 product_sys_id = 1 [(buf.validate.field).int64.gt = 0];
+  string rm_type = 2 [(buf.validate.field).string = {
+    in: [
+      "PRODUCT",
+      "GROUP"
+    ]
+  }];
+  int64 rm_product_sys_id = 3 [(buf.validate.field).int64.gte = 0];
+  string rm_group_code = 4 [(buf.validate.field).string.max_len = 30];
+  bool apply_to_duplicates = 5;
+}
+
+message DeleteRMDenierOverrideResponse {
+  common.v1.BaseResponse base = 1;
+  int32 deleted_count = 2;
+  repeated int64 applied_product_sys_ids = 3;
+}
+
 service CostProductMasterService {
   rpc CreateCostProductMaster(CreateCostProductMasterRequest) returns (CreateCostProductMasterResponse) {
     option (google.api.http) = {
@@ -360,5 +439,20 @@ service CostProductMasterService {
       post: "/api/v1/finance/cost-product-master/{product_sys_id}/duplicate"
       body: "*"
     };
+  }
+
+  rpc ListRMDenierOverrides(ListRMDenierOverridesRequest) returns (ListRMDenierOverridesResponse) {
+    option (google.api.http) = {get: "/api/v1/finance/cost-product-master/{product_sys_id}/rm-denier-overrides"};
+  }
+
+  rpc UpsertRMDenierOverride(UpsertRMDenierOverrideRequest) returns (UpsertRMDenierOverrideResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/finance/cost-product-master/{product_sys_id}/rm-denier-overrides"
+      body: "*"
+    };
+  }
+
+  rpc DeleteRMDenierOverride(DeleteRMDenierOverrideRequest) returns (DeleteRMDenierOverrideResponse) {
+    option (google.api.http) = {delete: "/api/v1/finance/cost-product-master/{product_sys_id}/rm-denier-overrides"};
   }
 }

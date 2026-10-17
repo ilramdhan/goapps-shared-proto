@@ -356,6 +356,8 @@ message CostRMDetail {
   double denier = 9;
   // Source of the ratio (e.g. DENIER, SPANDEX_DRAFT). Only set for DENIER ratio-mode products.
   string ratio_source = 10;
+  // Denier provenance: "" | MASTER | OVERRIDE. Only set for DENIER ratio-mode lines.
+  string denier_source = 11;
 }
 
 // FormulaEval traces one formula evaluation step.
