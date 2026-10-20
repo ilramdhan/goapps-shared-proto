@@ -42,6 +42,10 @@ message CostProductMaster {
   string erp_ms_batch_item = 25;
   string erp_item_type = 26;
   string erp_prd_per_day = 27; // decimal string
+  // Per-product RM ratio mode: "" = follow product type, INPUT or DENIER (migration 000579).
+  string rm_ratio_mode_override = 28;
+  // COALESCE(product override, product type mode); read-only.
+  string effective_rm_ratio_mode = 29;
 }
 
 // =============================================================================
@@ -124,6 +128,14 @@ message UpdateCostProductMasterRequest {
   string erp_ms_batch_item = 11 [(buf.validate.field).string.max_len = 12];
   string erp_item_type = 12 [(buf.validate.field).string.max_len = 20];
   string erp_prd_per_day = 13 [(buf.validate.field).string.pattern = "^([0-9]{1,12}(\\.[0-9]{1,6})?)?$"]; // decimal string
+  // Per-product RM ratio mode override. Absent = unchanged; "" = clear (follow product type).
+  optional string rm_ratio_mode_override = 14 [(buf.validate.field).string = {
+    in: [
+      "",
+      "INPUT",
+      "DENIER"
+    ]
+  }];
 }
 
 message UpdateCostProductMasterResponse {
