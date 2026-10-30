@@ -1332,6 +1332,8 @@ message MBHead {
   // workflow step (principle U-2) and is left untouched by RequestUnlockMBHead —
   // never substitute one for the other.
   optional string mbh_unlock_reason = 45;
+  // Oracle Orion item code (VARCHAR(200), optional; empty = none).
+  string mbh_orion_item_code = 46;
 }
 
 // CreateMBHeadRequest is the request for creating an MB Head record.
@@ -1394,6 +1396,8 @@ message CreateMBHeadRequest {
   }];
   // Additional shades (max 2).
   repeated MBHeadShadeInput additional_shades = 22 [(buf.validate.field).repeated.max_items = 2];
+  // Oracle Orion item code (optional, max 200; empty = none).
+  optional string mbh_orion_item_code = 23 [(buf.validate.field).string.max_len = 200];
 }
 
 // CreateMBHeadResponse is the response for creating an MB Head record.
@@ -1481,6 +1485,8 @@ message UpdateMBHeadRequest {
   // Whether additional_shades should replace the stored shade list. Only when true is the
   // list rewritten. Legacy forms omit this flag, so their updates never wipe existing shades.
   optional bool replace_additional_shades = 23;
+  // Oracle Orion item code (max 200). Absent = unchanged, "" = clear.
+  optional string mbh_orion_item_code = 24 [(buf.validate.field).string.max_len = 200];
 }
 
 // UpdateMBHeadResponse is the response for updating an MB Head record.
@@ -2106,6 +2112,8 @@ message MBSpin {
   string mbs_shade_name = 25;
   // Cross section, copied down from MB Head at auto-gen. Read-only lineage field.
   string mbs_cross_section = 26;
+  // Oracle Orion item code (output-only, read-only; inherited from head when empty).
+  string mbs_orion_item_code = 27;
 }
 
 // CreateMBSpinRequest is the request for creating an MB Spin record.
